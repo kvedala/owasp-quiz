@@ -1,0 +1,18 @@
+# Helm chart packaging
+*.tgz
+
+# Helm dependencies
+charts/
+*.lock
+
+# Generated values files
+values-*.yaml
+!values.yaml
+
+# Temporary files
+*.tmp
+.helmignore.bak
+
+# IDE files
+.vscode/
+.idea/

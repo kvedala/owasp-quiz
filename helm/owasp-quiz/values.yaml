@@ -1,0 +1,20 @@
+namespace: owasp-quiz
+
+image:
+  backend: ghcr.io/your-org/owasp-quiz-backend:latest
+  frontend: ghcr.io/your-org/owasp-quiz-frontend:latest
+
+replicaCount:
+  backend: 2
+  frontend: 2
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  host: quiz.opencompany.example
+  tls:
+    enabled: false
+    secretName: quiz-tls
