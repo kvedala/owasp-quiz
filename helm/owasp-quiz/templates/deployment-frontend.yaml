@@ -1,0 +1,23 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quiz-frontend
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: {{ .Values.replicaCount.frontend }}
+  selector:
+    matchLabels: { app: quiz-frontend }
+  template:
+    metadata:
+      labels: { app: quiz-frontend }
+    spec:
+      containers:
+      - name: web
+        image: {{ .Values.image.frontend }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        resources:
+          requests: { cpu: "50m", memory: "64Mi" }
+          limits: { cpu: "250m", memory: "256Mi" }

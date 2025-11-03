@@ -1,0 +1,9 @@
+apiVersion: v2
+name: owasp-quiz
+version: 0.1.0
+appVersion: "0.1.0"
+description: React + Go OWASP Cheat Sheet Series quiz portal with category scoring
+home: https://cheatsheetseries.owasp.org
+maintainers:
+  - name: Your Team
+    email: admin.technology@pspservicesco.com
