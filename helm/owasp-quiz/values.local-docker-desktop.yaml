@@ -1,0 +1,28 @@
+# Values for Docker Desktop Kubernetes using locally built images
+namespace: owasp-quiz
+
+# Use locally built images
+image:
+  backend: owasp-quiz-backend:latest
+  frontend: owasp-quiz-frontend:latest
+  pullPolicy: IfNotPresent
+
+replicaCount:
+  backend: 1
+  frontend: 1
+
+ingress:
+  enabled: true
+  # Using Caddy for local HTTPS with internal CA
+  className: caddy
+  # RFC 6761: any *.localhost resolves to 127.0.0.1
+  host: quiz.localhost
+  # Let Caddy manage TLS (internal CA); do not set spec.tls
+  tls:
+    enabled: false
+    secretName: ""
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    # Enable TLS and use Caddy's internal CA for local development
+    caddy.ingress.kubernetes.io/enable-tls: "true"
+    caddy.ingress.kubernetes.io/tls: internal

@@ -1,0 +1,25 @@
+# Values for using Caddy Ingress Controller (production-oriented)
+namespace: owasp-quiz
+
+ingress:
+  enabled: true
+  className: caddy
+  host: quiz.example.com
+  # Let Caddy manage TLS via ACME (Let's Encrypt). Do not set spec.tls here.
+  tls:
+    enabled: false
+    secretName: ""
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    # Enable automatic TLS; controller must be configured with an ACME email globally.
+    caddy.ingress.kubernetes.io/enable-tls: "true"
+    # Optional: choose issuer; omit for public ACME. For private/internal, set "internal".
+    # caddy.ingress.kubernetes.io/tls: "true"
+
+replicaCount:
+  backend: 2
+  frontend: 2
+
+image:
+  backend: ghcr.io/your-org/owasp-quiz-backend:latest
+  frontend: ghcr.io/your-org/owasp-quiz-frontend:latest
