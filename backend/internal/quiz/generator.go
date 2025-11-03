@@ -61,7 +61,7 @@ func BuildMCQ(categoryID, categoryName, cheatTitle, cheatURL string,
 
 		qs = append(qs, Question{
 			ID:         uuid.NewString(),
-			Stem:       "Which of the following aligns with guidance from "" + cheatTitle + ""?",
+			Stem:       "Which of the following aligns with guidance from \"" + cheatTitle + "\"?",
 			Options:    arr,
 			AnswerIx:   answerIx,
 			Source:     cheatTitle,

@@ -2,6 +2,7 @@
 package cert
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"time"
@@ -87,7 +88,13 @@ func GeneratePDF(data CertData) ([]byte, error) {
 	pdf.MultiCell(0, 5, "Selected: "+stringsJoin(data.SelectedCats, ", "), "", "C", false)
 	pdf.MultiCell(0, 5, "Available: "+stringsJoin(data.AllCats, ", "), "", "C", false)
 
-	return pdf.OutputBytes()
+	// Output to bytes using a buffer
+	var buf bytes.Buffer
+	err := pdf.Output(&buf)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func pct(a, b int) float64 { if b == 0 { return 0 }; return float64(a) * 100 / float64(b) }
