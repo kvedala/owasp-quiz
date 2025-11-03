@@ -4,8 +4,13 @@ kind: Service
 metadata:
   name: quiz-backend
   namespace: {{ .Values.namespace }}
+  annotations:
+    # Indicate backend uses HTTPS
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    caddy.ingress.kubernetes.io/backend-protocol: "https"
 spec:
   selector: { app: quiz-backend }
   ports:
-  - port: 80
-    targetPort: 8080
+  - port: 443
+    targetPort: 8443
+    name: https
