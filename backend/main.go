@@ -18,9 +18,9 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 
-	"github.com/your-org/owasp-quiz/backend/internal/cert"
-	"github.com/your-org/owasp-quiz/backend/internal/quiz"
-	"github.com/your-org/owasp-quiz/backend/internal/scraper"
+	"psp.com/owasp-quiz/backend/internal/cert"
+	"psp.com/owasp-quiz/backend/internal/quiz"
+	"psp.com/owasp-quiz/backend/internal/scraper"
 )
 
 type Attempt struct {
@@ -47,13 +47,55 @@ type Attempt struct {
 type ct struct{ Score, Total int }
 
 var (
-	httpClient = &http.Client{ Timeout: 12 * time.Second }
+	httpClient = &http.Client{ Timeout: 8 * time.Second }
 	attempts   = map[string]Attempt{}
 	indexCache []scraper.CheatSheet
 	indexTS    time.Time
 	top10Cache []scraper.Category
 	top10TS    time.Time
 )
+
+// Input validation patterns
+var (
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	nameRegex  = regexp.MustCompile(`^[a-zA-Z\s'-]{1,100}$`)
+	textRegex  = regexp.MustCompile(`^[a-zA-Z0-9\s.,'-]{1,200}$`)
+)
+
+// Input sanitization and validation functions
+func sanitizeText(input string) string {
+	if input == "" {
+		return ""
+	}
+	// HTML escape and trim
+	cleaned := html.EscapeString(strings.TrimSpace(input))
+	// Limit length
+	if len(cleaned) > 200 {
+		cleaned = cleaned[:200]
+	}
+	return cleaned
+}
+
+func validateEmail(email string) bool {
+	if email == "" {
+		return true // optional field
+	}
+	return len(email) <= 254 && emailRegex.MatchString(email)
+}
+
+func validateName(name string) bool {
+	if name == "" {
+		return false // required field
+	}
+	return len(name) <= 100 && nameRegex.MatchString(name)
+}
+
+func validateText(text string) bool {
+	if text == "" {
+		return true // optional field
+	}
+	return len(text) <= 200 && textRegex.MatchString(text)
+}
 
 func main() {
 	r := chi.NewRouter()
@@ -125,8 +167,16 @@ func main() {
 	r.Get("/api/certificate", handleCertificate)
 
 	port := getenv("PORT", "8080")
-	log.Println("backend listening on :" + port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	tlsCert := os.Getenv("TLS_CERT")
+	tlsKey := os.Getenv("TLS_KEY")
+
+	if tlsCert != "" && tlsKey != "" {
+		log.Println("backend listening on :" + port + " (HTTPS)")
+		log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, r))
+	} else {
+		log.Println("backend listening on :" + port + " (HTTP)")
+		log.Fatal(http.ListenAndServe(":"+port, r))
+	}
 }
 
 // --- Handlers ---
@@ -152,9 +202,16 @@ type generateResp struct {
 
 func handleGenerateQuiz(w http.ResponseWriter, r *http.Request) {
 	count := atoiDefault(r.URL.Query().Get("count"), 20)
+	// Validate count limits
 	if count < 5 { count = 5 }
+	if count > 50 { count = 50 } // Prevent abuse
+	
 	seed := time.Now().UnixNano()
-	if s := r.URL.Query().Get("seed"); s != "" { if v, err := strconv.ParseInt(s, 10, 64); err == nil { seed = v } }
+	if s := r.URL.Query().Get("seed"); s != "" { 
+		if v, err := strconv.ParseInt(s, 10, 64); err == nil { 
+			seed = v 
+		} 
+	}
 	cats, err := getTop10()
 	if err != nil { http.Error(w, "failed to load categories", 500); return }
 
@@ -226,7 +283,39 @@ type submitResp struct {
 
 func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	var req submitReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { http.Error(w, "bad request", 400); return }
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil { 
+		http.Error(w, "bad request", 400); return 
+	}
+	
+	// Validate and sanitize input
+	req.Name = sanitizeText(req.Name)
+	req.Email = sanitizeText(req.Email)
+	req.JobTitle = sanitizeText(req.JobTitle)
+	req.Department = sanitizeText(req.Department)
+	
+	if !validateName(req.Name) {
+		http.Error(w, "invalid name", 400); return
+	}
+	if !validateEmail(req.Email) {
+		http.Error(w, "invalid email", 400); return
+	}
+	if !validateText(req.JobTitle) {
+		http.Error(w, "invalid job title", 400); return
+	}
+	if !validateText(req.Department) {
+		http.Error(w, "invalid department", 400); return
+	}
+	
+	// Validate quiz ID format
+	if _, err := uuid.Parse(req.QuizID); err != nil {
+		http.Error(w, "invalid quiz ID", 400); return
+	}
+	
+	// Limit number of questions to prevent abuse
+	if len(req.Questions) > 50 {
+		http.Error(w, "too many questions", 400); return
+	}
+	
 	score := 0
 	total := len(req.Questions)
 
@@ -241,21 +330,32 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	passed := score >= passThreshold
 
 	atID := uuid.NewString()
-	attempts[atID] = Attempt{
+	// Store minimal data and add expiration
+	attempt := Attempt{
 		ID:           atID,
 		QuizID:       req.QuizID,
 		Score:        score,
 		Total:        total,
 		Passed:       passed,
-		Name:         strings.TrimSpace(req.Name),
-		Email:        strings.TrimSpace(req.Email),
-		JobTitle:     strings.TrimSpace(req.JobTitle),
-		Department:   strings.TrimSpace(req.Department),
+		Name:         req.Name, // Already sanitized
+		Email:        "", // Don't store email for privacy
+		JobTitle:     req.JobTitle,
+		Department:   req.Department,
 		CreatedAt:    time.Now(),
 		SelectedCats: req.SelectedCats,
 		AllCats:      req.AllCats,
 		PerCategory:  per,
 	}
+	
+	// Clean old attempts (older than 24 hours)
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for id, att := range attempts {
+		if att.CreatedAt.Before(cutoff) {
+			delete(attempts, id)
+		}
+	}
+	
+	attempts[atID] = attempt
 
 	perOut := map[string]map[string]int{}
 	for id, v := range per { perOut[id] = map[string]int{"score": v.Score, "total": v.Total} }
@@ -265,9 +365,19 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 func handleCertificate(w http.ResponseWriter, r *http.Request) {
 	atID := r.URL.Query().Get("attempt_id")
-	if atID == "" { http.Error(w, "attempt_id required", 400); return }
+	if atID == "" { 
+		http.Error(w, "attempt_id required", 400); return 
+	}
+	
+	// Validate UUID format
+	if _, err := uuid.Parse(atID); err != nil {
+		http.Error(w, "invalid attempt_id format", 400); return
+	}
+	
 	at, ok := attempts[atID]
-	if !ok { http.Error(w, "attempt not found", 404); return }
+	if !ok { 
+		http.Error(w, "attempt not found", 404); return 
+	}
 	var rows []cert.CategoryScore
 	for id, v := range at.PerCategory { rows = append(rows, cert.CategoryScore{ Category: id, Score: v.Score, Total: v.Total }) }
 	pdfBytes, err := cert.GeneratePDF(cert.CertData{
