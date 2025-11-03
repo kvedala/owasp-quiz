@@ -1,6 +1,21 @@
 
 import { certificateURL } from "../api";
 
+// Sanitize text to prevent XSS
+function sanitizeText(text) {
+  if (typeof text !== 'string') return '';
+  return text.replace(/[<>&"']/g, (match) => {
+    const entities = {
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      '"': '&quot;',
+      "'": '&#x27;'
+    };
+    return entities[match];
+  });
+}
+
 export default function Results({ candidate, quiz, result, categoryNames, allCats, selectedCats, onRestart }) {
   const pass = result.passed;
 
@@ -41,7 +56,7 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
       </table>
 
       <div style={{display:"flex", gap:12, marginTop:12}}>
-        <a className="btn" href={certificateURL(result.attemptId, candidate)} target="_blank" rel="noreferrer">
+        <a className="btn" href={certificateURL(result.attemptId, sanitizeText(candidate))} target="_blank" rel="noreferrer">
           Download Certificate (PDF)
         </a>
         <button onClick={onRestart}>Take another exam</button>
