@@ -1,0 +1,42 @@
+# Komodo values for local development (Docker Desktop, kind, minikube)
+# Assumes Caddy Ingress Controller is installed
+
+# Image configuration
+image:
+  repository: ghcr.io/mbecker20/komodo
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 9120
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: caddy
+  host: komodo.localhost
+  annotations:
+    kubernetes.io/ingress.class: caddy
+    caddy.ingress.kubernetes.io/enable-tls: "true"
+    caddy.ingress.kubernetes.io/tls: internal
+
+# Resource limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Persistence
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""  # Use default storage class
+
+# Environment variables
+env:
+  KOMODO_HOST: "https://komodo.localhost"
