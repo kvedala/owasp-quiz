@@ -5,9 +5,12 @@ kind: Ingress
 metadata:
   name: quiz
   namespace: {{ .Values.namespace }}
+  {{- if .Values.ingress.annotations }}
   annotations:
-    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+  {{- end }}
 spec:
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
   - host: {{ .Values.ingress.host }}
     http:
@@ -17,13 +20,13 @@ spec:
         backend:
           service:
             name: quiz-backend
-            port: { number: 80 }
+            port: { number: 443 }
       - path: /
         pathType: Prefix
         backend:
           service:
             name: quiz-frontend
-            port: { number: 80 }
+            port: { number: 443 }
   {{- if .Values.ingress.tls.enabled }}
   tls:
   - hosts: [ {{ .Values.ingress.host | quote }} ]
