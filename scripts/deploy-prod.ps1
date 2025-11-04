@@ -1,7 +1,6 @@
 param(
   [string]$Namespace = "owasp-quiz",
   [string]$AppHost = "quiz.pspservicesco.com",
-  [string]$KomodoHost = "komodo.quiz.pspservicesco.com",
   [ValidateSet("ClusterIssuer","Issuer")]
   [string]$IssuerKind = "ClusterIssuer",
   [string]$IssuerName = "letsencrypt-prod",
@@ -75,9 +74,6 @@ $setArgs = @(
   "--set", "ingress.certManager.issuerName=$IssuerName",
   "--set", "ingress.tls.enabled=true"
 )
-if ($KomodoHost) {
-  $setArgs += @("--set", "ingress.komodoHost=$KomodoHost", "--set", "ingress.komodoTls.enabled=true")
-}
 
 $helmArgs = @(
   "upgrade", "--install", "owasp-quiz", $ChartPath,
@@ -92,12 +88,10 @@ if ($Wait) {
   Write-Host "Waiting for deployments to be ready..." -ForegroundColor Green
   Exec kubectl "-n $Namespace rollout status deploy/quiz-backend --timeout=300s"
   Exec kubectl "-n $Namespace rollout status deploy/quiz-frontend --timeout=300s"
-  Exec kubectl "-n $Namespace rollout status deploy/komodo --timeout=300s"
 }
 
 Write-Host "\nProd deploy complete." -ForegroundColor Green
 Write-Host ("- App URL:        https://{0}" -f $AppHost) -ForegroundColor Green
-if ($KomodoHost) { Write-Host ("- Komodo URL:     https://{0}" -f $KomodoHost) -ForegroundColor Green }
 
 Write-Host "\nNotes:" -ForegroundColor DarkGray
 Write-Host "- Ensure DNS A records for the host(s) point to your ingress controller." -ForegroundColor DarkGray

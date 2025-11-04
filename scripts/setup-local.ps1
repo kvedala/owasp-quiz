@@ -3,8 +3,7 @@ param(
   [switch]$RecreateCluster,
   [switch]$BuildImages,
   [string]$Namespace = "owasp-quiz",
-  [string]$AppHost = "quiz.localhost",
-  [string]$KomodoHost = "komodo.localhost"
+  [string]$AppHost = "quiz.localhost"
 )
 
 $ErrorActionPreference = "Stop"
@@ -93,27 +92,41 @@ else {
 
 if (-not (Test-Path $LocalValues)) { throw "Local values file not found: $LocalValues" }
 
-# Generate secure random password for Komodo admin user
-$KomodoPassword = -join ((48..57) + (65..90) + (97..122) + @(33,35,36,37,38,42,43,45,61) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+Write-Host "Updating chart dependencies..." -ForegroundColor Green
+Exec helm "dependency update `"$ChartPath`""
 
 Write-Host "Deploying chart to https://$AppHost ..." -ForegroundColor Green
-Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`" --set komodo.auth.password=`"$KomodoPassword`""
-
-Write-Host "`nKomodo admin credentials:" -ForegroundColor Yellow
-Write-Host "  Username: admin" -ForegroundColor Cyan
-Write-Host "  Password: $KomodoPassword" -ForegroundColor Cyan
-Write-Host "  (Save this password - it won't be shown again)" -ForegroundColor Yellow
+Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`" --dependency-update"
 
 Write-Host "Using NGINX Ingress Controller default TLS certificate for local HTTPS." -ForegroundColor Yellow
 
 Write-Host "Waiting for app deployments to become ready..." -ForegroundColor Green
 Exec kubectl "-n $Namespace rollout status deploy/quiz-backend --timeout=180s"
 Exec kubectl "-n $Namespace rollout status deploy/quiz-frontend --timeout=180s"
-Exec kubectl "-n $Namespace rollout status deploy/komodo --timeout=180s"
+try {
+  Exec kubectl "-n $Namespace rollout status deploy/kubernetes-dashboard --timeout=180s"
+} catch {
+  Write-Host "Kubernetes Dashboard deployment not found (may be disabled)." -ForegroundColor Yellow
+}
 
 Write-Host "`nDone!" -ForegroundColor Green
-Write-Host "- App URL:        https://$AppHost" -ForegroundColor Green
-Write-Host "- Komodo URL:     https://$KomodoHost" -ForegroundColor Green
+Write-Host "- App URL:               https://$AppHost" -ForegroundColor Green
+Write-Host "- Kubernetes Dashboard:  https://k8s.localhost" -ForegroundColor Green
+
+try {
+  $dashToken = (kubectl -n $Namespace create token admin-user 2>$null)
+  if ($LASTEXITCODE -eq 0 -and $dashToken) {
+    Write-Host "\nKubernetes Dashboard token:" -ForegroundColor Yellow
+    Write-Host $dashToken -ForegroundColor Cyan
+  } else {
+    Write-Host "\nRun to get dashboard token:" -ForegroundColor Yellow
+    Write-Host "kubectl -n $Namespace create token admin-user" -ForegroundColor Cyan
+  }
+}
+catch {
+  Write-Host "\nTo get a dashboard token later:" -ForegroundColor Yellow
+  Write-Host "kubectl -n $Namespace create token admin-user" -ForegroundColor Cyan
+}
 
 Write-Host "`nTips:" -ForegroundColor DarkGray
 Write-Host "- Self-signed certs are used locally; add a browser exception if prompted." -ForegroundColor DarkGray
