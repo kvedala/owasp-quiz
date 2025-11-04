@@ -1,5 +1,4 @@
 # Values for using Caddy Ingress Controller (production-oriented)
-namespace: owasp-quiz
 
 ingress:
   enabled: true

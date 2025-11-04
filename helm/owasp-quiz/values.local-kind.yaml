@@ -1,5 +1,4 @@
 # Example values for local Kubernetes (kind or minikube) using Caddy Ingress Controller
-namespace: owasp-quiz
 
 # Use your locally built images or public ones
 image:
