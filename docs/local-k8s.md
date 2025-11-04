@@ -1,10 +1,16 @@
-# Local Kubernetes (kind/minikube) with Helm
+# Local Kubernetes (Docker Desktop/kind/minikube)
 
-This guide shows two options for local development and testing via Helm:
-- Option A: ingress-nginx with a self-signed or mkcert TLS secret
-- Option B: Caddy Ingress Controller with automatic local HTTPS
+Recommended: use the provided script with NGINX Ingress. It serves HTTPS using the ingress controller's default fake certificate for local hosts (e.g., `*.localhost`).
 
-Both options use the chart in `helm/owasp-quiz` and the example `values.local-kind.yaml`.
+```powershell
+./scripts/setup-local.ps1
+```
+
+URLs:
+- https://quiz.localhost
+- https://komodo.localhost
+
+The chart routes `/api` to the backend and `/` to the frontend over HTTPS internally end-to-end.
 
 ## Prerequisites
 - Docker
@@ -14,7 +20,9 @@ Both options use the chart in `helm/owasp-quiz` and the example `values.local-ki
 
 ---
 
-## Option A: kind + ingress-nginx (recommended starter)
+---
+
+## Alternative: kind + ingress-nginx (manual)
 
 1) Create a kind cluster with ingress enabled (example):
 
@@ -30,7 +38,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main
 kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
 ```
 
-3) Create a local TLS cert and secret (mkcert is easiest):
+3) (Optional) Create a local TLS cert and secret (mkcert):
 
 ```powershell
 # Install mkcert if needed: https://github.com/FiloSottile/mkcert
@@ -55,7 +63,7 @@ helm upgrade --install owasp-quiz ./helm/owasp-quiz `
 
 ---
 
-## Option B: Caddy Ingress Controller (built-in local HTTPS)
+## Alternative: Caddy Ingress Controller (built-in local HTTPS)
 
 1) Create your cluster (kind or minikube).
 
@@ -81,23 +89,9 @@ Caddy will terminate HTTPS using its internal CA for local hosts (e.g., `quiz.lo
 
 ---
 
-## One-command setup (PowerShell)
-
-From the repo root:
-
-```powershell
-./scripts/setup-local.ps1 -InstallPortainer
-```
-
-Flags:
-- `-RecreateCluster` to delete and recreate the kind cluster named `owasp-quiz`.
-- `-InstallPortainer` to also install Portainer with Caddy ingress.
-
----
-
 ## Notes
 - The chart now supports pluggable annotations and `ingressClassName` (see `templates/ingress.yaml`).
-- For production, set a real hostname and manage certs via cert-manager/ACME. Update `values.yaml` and `ingress.annotations` accordingly.
+- For production, set a real hostname and manage certs via cert-manager/ACME. See `docs/prod.md`.
 - If you run the frontend dev server outside the cluster, set `ALLOWED_ORIGINS` on the backend or use single-host routing via the Ingress to avoid CORS.
 
 ### Optional: Manage with Portainer

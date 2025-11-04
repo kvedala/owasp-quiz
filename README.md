@@ -11,6 +11,22 @@ A React + Go web portal that dynamically generates multiple‑choice questions f
 
 ---
 
+## Kubernetes quick start
+
+Local HTTPS via NGINX Ingress (uses the controller's default fake cert):
+
+```powershell
+./scripts/setup-local.ps1
+```
+
+URLs:
+- https://quiz.localhost
+- https://komodo.localhost
+
+For details, see `docs/local-k8s.md`.
+
+---
+
 ## Quick start (local dev)
 
 ### Backend (Go)
@@ -71,6 +87,25 @@ helm upgrade --install owasp-quiz ./helm/owasp-quiz -f my-values.yaml
 ```
 
 > After DNS points to your Ingress, open `https://quiz.example.com`.
+
+---
+
+## Production deploy (Let’s Encrypt)
+
+With cert-manager + ClusterIssuer (`letsencrypt-prod`) using HTTP-01:
+
+```powershell
+./scripts/deploy-prod.ps1 -Namespace owasp-quiz `
+  -AppHost quiz.opencompany.example `
+  -KomodoHost komodo.quiz.opencompany.example `
+  -IssuerKind ClusterIssuer `
+  -IssuerName letsencrypt-prod `
+  -IngressClass nginx `
+  -CreateClusterIssuer `
+  -Wait
+```
+
+See `docs/prod.md` for cert-manager setup and DNS notes.
 
 ---
 
