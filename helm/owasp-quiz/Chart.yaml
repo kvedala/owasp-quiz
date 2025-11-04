@@ -7,3 +7,9 @@ home: https://cheatsheetseries.owasp.org
 maintainers:
   - name: Your Team
     email: admin.technology@pspservicesco.com
+
+dependencies:
+  - name: kubernetes-dashboard
+    version: "7.5.0"
+    repository: "https://kubernetes.github.io/dashboard/"
+    condition: kubernetes-dashboard.enabled
