@@ -43,9 +43,7 @@ If you prefer a namespace-scoped Issuer, change `kind: Issuer` and add `metadata
 ## Configure chart values
 Edit `helm/owasp-quiz/values.prod.yaml`:
 - `ingress.host`: `quiz.opencompany.example`
-- `ingress.komodoHost`: `komodo.quiz.opencompany.example`
 - `ingress.tls.enabled: true` and `ingress.tls.secretName: quiz-tls`
-- `ingress.komodoTls.enabled: true` and `ingress.komodoTls.secretName: komodo-tls`
 - `ingress.certManager.enabled: true`
 - `ingress.certManager.issuerKind: ClusterIssuer`
 - `ingress.certManager.issuerName: letsencrypt-prod`
@@ -56,7 +54,6 @@ Use the provided script (recommended):
 ```powershell
 ./scripts/deploy-prod.ps1 -Namespace owasp-quiz `
   -AppHost quiz.opencompany.example `
-  -KomodoHost komodo.quiz.opencompany.example `
   -IssuerKind ClusterIssuer `
   -IssuerName letsencrypt-prod `
   -IngressClass nginx `
@@ -81,7 +78,6 @@ kubectl -n owasp-quiz get certificate,certificateRequest,order,challenge
 ```
 - Open the application URLs:
   - https://quiz.opencompany.example
-  - https://komodo.quiz.opencompany.example
 
 ## Notes
 - DNS A records must point to your ingress controller’s public IP.

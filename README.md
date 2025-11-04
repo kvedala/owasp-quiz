@@ -21,7 +21,6 @@ Local HTTPS via NGINX Ingress (uses the controller's default fake cert):
 
 URLs:
 - https://quiz.localhost
-- https://komodo.localhost
 
 For details, see `docs/local-k8s.md`.
 
@@ -97,7 +96,6 @@ With cert-manager + ClusterIssuer (`letsencrypt-prod`) using HTTP-01:
 ```powershell
 ./scripts/deploy-prod.ps1 -Namespace owasp-quiz `
   -AppHost quiz.opencompany.example `
-  -KomodoHost komodo.quiz.opencompany.example `
   -IssuerKind ClusterIssuer `
   -IssuerName letsencrypt-prod `
   -IngressClass nginx `
