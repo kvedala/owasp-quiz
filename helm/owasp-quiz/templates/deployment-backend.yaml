@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: quiz-backend
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   replicas: {{ .Values.replicaCount.backend }}
   selector:
@@ -21,6 +21,8 @@ spec:
         env:
         - name: PORT
           value: "8443"
+        - name: ALLOWED_ORIGINS
+          value: "http://{{ .Values.ingress.host }},https://{{ .Values.ingress.host }},http://{{ .Values.ingress.komodoHost }},https://{{ .Values.ingress.komodoHost }},http://localhost:5173,https://localhost:5173"
         resources:
           requests: { cpu: "100m", memory: "128Mi" }
           limits: { cpu: "500m", memory: "512Mi" }
