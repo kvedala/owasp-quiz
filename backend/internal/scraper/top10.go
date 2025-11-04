@@ -44,15 +44,20 @@ func FetchTop10Categories(client *http.Client) ([]Category, error) {
 		id := reID.FindString(txt)
 		name := strings.TrimSpace(strings.TrimPrefix(txt, id))
 		name = strings.TrimLeft(name, "–- ")
+		name = cleanText(name)
 
 		var list []CheatSheet
 		// Next sibling lists hold the mapped cheat sheets with <a> links
 		s.NextAll().Filter("ul").First().Find("a").Each(func(_ int, a *goquery.Selection) {
 			href, ok := a.Attr("href")
-			title := strings.TrimSpace(a.Text())
+			title := cleanText(a.Text())
 			if !ok || title == "" { return }
-			if strings.HasPrefix(href, "/cheatsheets/") && strings.HasSuffix(href, ".html") {
-				list = append(list, CheatSheet{Title: title, URL: baseURL + href})
+			// Handle both absolute and relative paths
+			if (strings.HasPrefix(href, "/cheatsheets/") || strings.HasPrefix(href, "cheatsheets/")) && strings.HasSuffix(href, ".html") {
+				if !strings.HasPrefix(href, "/") {
+					href = "/" + href
+				}
+				list = append(list, CheatSheet{Title: cleanText(title), URL: baseURL + href})
 			}
 		})
 

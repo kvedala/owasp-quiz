@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"regexp"
+	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -19,6 +21,27 @@ const (
 type CheatSheet struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
+}
+
+// cleanText normalizes text scraped from the web by:
+// - trimming whitespace and collapsing internal runs of spaces
+// - removing non-breaking and zero-width spaces
+// - stripping leading/trailing non-alphanumeric noise (e.g., stray markers like ¶, ┬╢)
+func cleanText(s string) string {
+	if s == "" { return s }
+	s = strings.TrimSpace(s)
+	// normalize common problematic chars
+	s = strings.ReplaceAll(s, "\u00A0", " ") // nbsp
+	s = strings.ReplaceAll(s, "\u200B", "")  // zero-width space
+	s = strings.ReplaceAll(s, "\uFEFF", "")  // BOM
+	// strip leading non-alnum
+	s = strings.TrimLeftFunc(s, func(r rune) bool { return !(unicode.IsLetter(r) || unicode.IsNumber(r)) })
+	// strip trailing non-alnum, allow common closers ) ]
+	reTrail := regexp.MustCompile(`[^\p{L}\p{N}\)\]]+$`)
+	s = reTrail.ReplaceAllString(s, "")
+	// collapse whitespace runs
+	s = strings.Join(strings.Fields(s), " ")
+	return s
 }
 
 // FetchAlphabeticalIndex finds the "Index Alphabetical" page from the homepage,
@@ -48,14 +71,17 @@ func FetchAlphabeticalIndex(client *http.Client) ([]CheatSheet, error) {
 	var out []CheatSheet
 	doc.Find("a").Each(func(_ int, s *goquery.Selection) {
 		href, ok := s.Attr("href")
-		title := strings.TrimSpace(s.Text())
+		title := cleanText(s.Text())
 		if !ok || title == "" {
 			return
 		}
-		// We only want official cheat sheet pages.
-		if strings.HasPrefix(href, "/cheatsheets/") && strings.HasSuffix(href, ".html") {
+		// We only want official cheat sheet pages - handle both absolute and relative paths
+		if (strings.HasPrefix(href, "/cheatsheets/") || strings.HasPrefix(href, "cheatsheets/")) && strings.HasSuffix(href, ".html") {
+			if !strings.HasPrefix(href, "/") {
+				href = "/" + href
+			}
 			out = append(out, CheatSheet{
-				Title: title,
+				Title: cleanText(title),
 				URL:   baseURL + href,
 			})
 		}
@@ -125,7 +151,7 @@ func PullFacts(client *http.Client, pageURL string) ([]string, error) {
 	var facts []string
 	// Heuristic: capture bullet points from content area
 	doc.Find("main ul li, article ul li").Each(func(_ int, li *goquery.Selection) {
-		text := strings.Join(strings.Fields(strings.TrimSpace(li.Text())), " ")
+		text := cleanText(li.Text())
 		if len(text) > 0 && len(text) < 260 { // skip ultra-long lines
 			facts = append(facts, text)
 		}
