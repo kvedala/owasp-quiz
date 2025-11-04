@@ -16,14 +16,9 @@ ingress:
   enabled: true
   className: nginx
   host: quiz.opencompany.example
-  # Dedicated host for Komodo in prod
-  komodoHost: komodo.quiz.opencompany.example
   tls:
     enabled: true
     secretName: quiz-tls
-  komodoTls:
-    enabled: true
-    secretName: komodo-tls
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"

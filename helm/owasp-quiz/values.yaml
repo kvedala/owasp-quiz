@@ -12,25 +12,25 @@ replicaCount:
 service:
   type: ClusterIP
 
-# Komodo configuration
-komodo:
-  auth:
-    username: admin
-    # Password should be set via --set flag during deployment for security
-    password: ""
+# Kubernetes Dashboard (controlled via local values)
+kubernetes-dashboard:
+  enabled: false
+  ingress:
+    enabled: false
+    className: nginx
+    hosts: []
+    annotations: {}
+  serviceAccount:
+    create: true
+    name: admin-user
 
 ingress:
   enabled: true
   className: nginx
   host: quiz.opencompany.example
-  # Optional separate host for Komodo UI (dev/local recommended)
-  komodoHost: komodo.localhost
   tls:
     enabled: true
     secretName: quiz-tls
-  komodoTls:
-    enabled: false
-    secretName: komodo-tls
   # Controller-specific annotations. Defaults target nginx; override for Caddy or others.
   annotations:
     kubernetes.io/ingress.class: nginx
