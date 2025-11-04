@@ -1,0 +1,21 @@
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+
+# Helm
+helm/**/charts/
+helm/**/Chart.lock
+*.tgz
+
+# Ad-hoc manifests (use Helm templates instead)
+dashboard-ingress.yaml
