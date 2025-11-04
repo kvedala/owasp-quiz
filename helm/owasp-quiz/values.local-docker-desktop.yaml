@@ -1,5 +1,11 @@
 # Values for Docker Desktop Kubernetes using locally built images
 
+# Komodo configuration
+komodo:
+  auth:
+    username: admin
+    # Password is generated during deployment
+
 # Use locally built images
 image:
   backend: owasp-quiz-backend:latest

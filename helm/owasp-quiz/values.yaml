@@ -12,6 +12,13 @@ replicaCount:
 service:
   type: ClusterIP
 
+# Komodo configuration
+komodo:
+  auth:
+    username: admin
+    # Password should be set via --set flag during deployment for security
+    password: ""
+
 ingress:
   enabled: true
   className: nginx
