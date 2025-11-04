@@ -96,7 +96,7 @@ Write-Host "Updating chart dependencies..." -ForegroundColor Green
 Exec helm "dependency update `"$ChartPath`""
 
 Write-Host "Deploying chart to https://$AppHost ..." -ForegroundColor Green
-Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`" --dependency-update"
+Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`" --set kubernetes-dashboard.enabled=true --set kubernetes-dashboard.ingress.enabled=true --dependency-update"
 
 Write-Host "Using NGINX Ingress Controller default TLS certificate for local HTTPS." -ForegroundColor Yellow
 
