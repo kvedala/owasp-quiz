@@ -21,6 +21,8 @@ Local HTTPS via NGINX Ingress (uses the controller's default fake cert):
 
 URLs:
 - https://quiz.localhost
+ - http://quiz.localhost (redirects to HTTPS)
+ - https://k8s.localhost (Kubernetes Dashboard; token required)
 
 For details, see `docs/local-k8s.md`.
 
@@ -127,6 +129,8 @@ References:
 - **Caching**: The backend caches the OWASP index and Top‑10 categories for 6 hours.
 - **Politeness**: Requests include a User‑Agent and a small delay when retrieving pages.
 - **Attribution**: The UI header and certificate include attribution per **CC BY‑SA 4.0**.
+ - **HTTPS redirect**: NGINX Ingress enforces HTTPS‑only via `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"`.
+ - **Local self‑signed backends**: Local values disable upstream TLS verification for HTTPS pods via `nginx.ingress.kubernetes.io/proxy-ssl-verify: "false"`.
 
 ---
 
@@ -142,6 +146,7 @@ References:
 
 - If questions fail to generate, OWASP page structure may have changed. Update the selectors in `internal/scraper/*`.
 - Ensure the cluster can reach `https://cheatsheetseries.owasp.org` over the internet.
+ - If the Ingress returns 502 locally, ensure the NGINX annotations include `proxy-ssl-verify: "false"` to trust self‑signed backend/frontend pods.
 
 ---
 
