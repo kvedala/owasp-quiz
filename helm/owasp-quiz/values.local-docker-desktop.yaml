@@ -22,6 +22,8 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Upstreams use self-signed certs in pods; disable verify for local dev
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "false"
 
 # Enable Kubernetes Dashboard with ingress at k8s.localhost
 kubernetes-dashboard:
@@ -33,8 +35,14 @@ kubernetes-dashboard:
       - k8s.localhost
     annotations:
       kubernetes.io/ingress.class: nginx
-      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      # Allow HTTP for local dashboard access to avoid TLS issues
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
       nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
   serviceAccount:
     create: true
     name: admin-user
+
+# Optional local-only ingress for the standalone dashboard release (kdash)
+# This creates an Ingress to service `kdash-kong-proxy` at host k8s.localhost
+localDashboardIngress:
+  enabled: true
