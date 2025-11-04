@@ -93,8 +93,16 @@ else {
 
 if (-not (Test-Path $LocalValues)) { throw "Local values file not found: $LocalValues" }
 
+# Generate secure random password for Komodo admin user
+$KomodoPassword = -join ((48..57) + (65..90) + (97..122) + @(33,35,36,37,38,42,43,45,61) | Get-Random -Count 32 | ForEach-Object {[char]$_})
+
 Write-Host "Deploying chart to https://$AppHost ..." -ForegroundColor Green
-Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`""
+Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`" --set komodo.auth.password=`"$KomodoPassword`""
+
+Write-Host "`nKomodo admin credentials:" -ForegroundColor Yellow
+Write-Host "  Username: admin" -ForegroundColor Cyan
+Write-Host "  Password: $KomodoPassword" -ForegroundColor Cyan
+Write-Host "  (Save this password - it won't be shown again)" -ForegroundColor Yellow
 
 Write-Host "Using NGINX Ingress Controller default TLS certificate for local HTTPS." -ForegroundColor Yellow
 
