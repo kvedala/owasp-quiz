@@ -1,10 +1,10 @@
 param(
-    [string]$ClusterName = "owasp-quiz",
-    [switch]$RecreateCluster,
-    [switch]$InstallKomodo,
-    [string]$Namespace = "owasp-quiz",
-    [string]$AppHost = "quiz.localhost",
-    [string]$KomodoHost = "komodo.localhost"
+  [string]$ClusterName = "owasp-quiz",
+  [switch]$RecreateCluster,
+  [switch]$BuildImages,
+  [string]$Namespace = "owasp-quiz",
+  [string]$AppHost = "quiz.localhost",
+  [string]$KomodoHost = "komodo.localhost"
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,33 +45,41 @@ $currentContext = kubectl config current-context 2>$null
 $isDockerDesktop = $currentContext -eq "docker-desktop"
 
 if ($isDockerDesktop) {
-    Write-Host "Detected Docker Desktop Kubernetes - building images locally..." -ForegroundColor Green
-    
+  Write-Host "Detected Docker Desktop Kubernetes." -ForegroundColor Green
+  if ($BuildImages) {
     Push-Location $RepoRoot
     try {
-        Write-Host "Building backend image..." -ForegroundColor Cyan
-        Exec docker "build -t owasp-quiz-backend:latest -f backend/Dockerfile ."
+      Write-Host "Building backend image..." -ForegroundColor Cyan
+      Exec docker "build -t owasp-quiz-backend:latest -f backend/Dockerfile ."
 
-        Write-Host "Building frontend image..." -ForegroundColor Cyan
-        Exec docker "build -t owasp-quiz-frontend:latest -f frontend/Dockerfile ."
+      Write-Host "Building frontend image..." -ForegroundColor Cyan
+      Exec docker "build -t owasp-quiz-frontend:latest -f frontend/Dockerfile ."
     }
     finally {
-        Pop-Location
+      Pop-Location
     }
+  }
 }
 
-Write-Host "Installing Caddy Ingress Controller via Helm..." -ForegroundColor Green
-# Create caddy-system namespace if it doesn't exist
-if (-not (Test-Namespace "caddy-system")) { 
-    Exec kubectl "create namespace caddy-system" 
+Write-Host "Installing NGINX Ingress Controller via Helm..." -ForegroundColor Green
+# Ensure target namespace exists (same as app namespace)
+if (-not (Test-Namespace $Namespace)) { 
+  Exec kubectl "create namespace $Namespace" 
 }
 
-# Add Caddy Helm repo and install
-Exec helm "repo add caddy https://caddyserver.github.io/ingress/"
+# Uninstall Caddy if present in app namespace
+$caddyInApp = & helm list -n $Namespace -q 2>$null
+if ($LASTEXITCODE -eq 0 -and $caddyInApp -and ($caddyInApp -split "`n") -contains 'caddy') {
+  Write-Host "Uninstalling existing Caddy ingress controller..." -ForegroundColor Yellow
+  Exec helm "uninstall caddy -n $Namespace"
+}
+
+# Add ingress-nginx Helm repo and install in the app namespace
+Exec helm "repo add ingress-nginx https://kubernetes.github.io/ingress-nginx"
 Exec helm "repo update"
-Exec helm "upgrade --install caddy caddy/caddy-ingress-controller --namespace caddy-system --wait --timeout=180s"
+Exec helm "upgrade --install ingress-nginx ingress-nginx/ingress-nginx --namespace $Namespace --wait --timeout=300s"
 
-Write-Host "Caddy Ingress Controller installed successfully." -ForegroundColor Green
+Write-Host "NGINX Ingress Controller installed in namespace '$Namespace'." -ForegroundColor Green
 
 $ChartPath = Join-Path $RepoRoot "helm/owasp-quiz"
 
@@ -86,98 +94,19 @@ else {
 if (-not (Test-Path $LocalValues)) { throw "Local values file not found: $LocalValues" }
 
 Write-Host "Deploying chart to https://$AppHost ..." -ForegroundColor Green
-Exec helm "upgrade --install owasp-quiz $ChartPath -f `"$LocalValues`""
+Exec helm "upgrade --install owasp-quiz $ChartPath -n $Namespace --create-namespace -f `"$LocalValues`""
+
+Write-Host "Using NGINX Ingress Controller default TLS certificate for local HTTPS." -ForegroundColor Yellow
 
 Write-Host "Waiting for app deployments to become ready..." -ForegroundColor Green
 Exec kubectl "-n $Namespace rollout status deploy/quiz-backend --timeout=180s"
 Exec kubectl "-n $Namespace rollout status deploy/quiz-frontend --timeout=180s"
-
-# 4) Optional: Install Komodo
-if ($InstallKomodo.IsPresent) {
-    Write-Host "Installing Komodo (Caddy, local HTTPS) ..." -ForegroundColor Green
-    if (-not (Test-Namespace "komodo")) { Exec kubectl "create namespace komodo" }
-    $KomodoValues = Join-Path $RepoRoot "helm/komodo/values.local.yaml"
-    if (-not (Test-Path $KomodoValues)) { throw "Komodo values not found: $KomodoValues" }
-    
-    # Create a simple deployment for Komodo (since there's no official Helm chart yet)
-    @"
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: komodo
-  namespace: komodo
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: komodo
-  template:
-    metadata:
-      labels:
-        app: komodo
-    spec:
-      containers:
-      - name: komodo
-        image: ghcr.io/mbecker20/komodo:latest
-        ports:
-        - containerPort: 9120
-        env:
-        - name: KOMODO_HOST
-          value: https://$KomodoHost
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: komodo
-  namespace: komodo
-spec:
-  selector:
-    app: komodo
-  ports:
-  - port: 9120
-    targetPort: 9120
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: komodo
-  namespace: komodo
-  annotations:
-    kubernetes.io/ingress.class: caddy
-    caddy.ingress.kubernetes.io/enable-tls: "true"
-    caddy.ingress.kubernetes.io/tls: internal
-spec:
-  ingressClassName: caddy
-  rules:
-  - host: $KomodoHost
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: komodo
-            port:
-              number: 9120
-"@ | kubectl apply -f -
-    
-    Write-Host "Komodo installed. Waiting for deployment..." -ForegroundColor Green
-    Exec kubectl "-n komodo rollout status deploy/komodo --timeout=180s"
-}
+Exec kubectl "-n $Namespace rollout status deploy/komodo --timeout=180s"
 
 Write-Host "`nDone!" -ForegroundColor Green
 Write-Host "- App URL:        https://$AppHost" -ForegroundColor Green
-if ($InstallKomodo) {
-    Write-Host "- Komodo URL:     https://$KomodoHost" -ForegroundColor Green
-}
+Write-Host "- Komodo URL:     https://$KomodoHost" -ForegroundColor Green
 
 Write-Host "`nTips:" -ForegroundColor DarkGray
-Write-Host "- If the browser warns about local CA, trust Caddy's local CA for development." -ForegroundColor DarkGray
-Write-Host "- Both frontend and backend now use HTTPS internally for end-to-end encryption." -ForegroundColor DarkGray
+Write-Host "- Self-signed certs are used locally; add a browser exception if prompted." -ForegroundColor DarkGray
+Write-Host "- Both frontend and backend use HTTPS internally for end-to-end encryption." -ForegroundColor DarkGray
