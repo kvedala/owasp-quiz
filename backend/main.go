@@ -184,12 +184,14 @@ func main() {
 func handleCategories(w http.ResponseWriter, r *http.Request) {
 	cats, err := getTop10()
 	if err != nil { http.Error(w, "failed to load categories", 500); return }
+	if cats == nil { cats = []scraper.Category{} }
 	writeJSON(w, cats)
 }
 
 func handleTopics(w http.ResponseWriter, r *http.Request) {
 	topics, err := getIndex()
 	if err != nil { http.Error(w, "failed to load topics", 500); return }
+	if topics == nil { topics = []scraper.CheatSheet{} }
 	writeJSON(w, topics)
 }
 
