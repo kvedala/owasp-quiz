@@ -1,21 +1,35 @@
 # Local Kubernetes (Docker Desktop/kind/minikube)
 
-Recommended: use the provided script with NGINX Ingress. It serves HTTPS using the ingress controller's default fake certificate for local hosts (e.g., `*.localhost`).
+Recommended: use the provided script with NGINX Ingress. It serves HTTPS using the ingress controller's default self-signed certificate for local hosts (e.g., `*.localhost`). All HTTP requests are redirected to HTTPS.
 
 ```powershell
-./scripts/setup-local.ps1
+./scripts/setup-local.ps1 [-BuildImages]
 ```
 
 URLs:
-- https://quiz.localhost
+- https://quiz.localhost (frontend + API under /api)
+- http://k8s.localhost (Kubernetes Dashboard; local-only)
 
-The chart routes `/api` to the backend and `/` to the frontend over HTTPS internally end-to-end.
+The chart routes `/api` to the backend and `/` to the frontend. Both services speak HTTPS inside the cluster; the ingress terminates external TLS.
 
 ## Prerequisites
 - Docker
 - One local Kubernetes: kind or minikube
 - Helm v3
 - Windows users: PowerShell admin access to edit `hosts` if you prefer a custom hostname (we use `quiz.localhost`, and by RFC 6761 any `*.localhost` resolves to 127.0.0.1).
+
+### Notes for local script
+- Installs NGINX Ingress into the `owasp-quiz` namespace.
+- Sets `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"` so HTTP→HTTPS.
+- Disables upstream TLS verify for self-signed pod certs in local dev.
+- Enables an optional dashboard ingress via `localDashboardIngress.enabled=true` (k8s.localhost).
+- Generate a dashboard token:
+
+```powershell
+kubectl -n owasp-quiz create serviceaccount admin-user
+kubectl -n owasp-quiz create clusterrolebinding admin-user-binding --clusterrole=cluster-admin --serviceaccount=owasp-quiz:admin-user
+kubectl -n owasp-quiz create token admin-user --duration=1h
+```
 
 ---
 
@@ -56,7 +70,7 @@ helm upgrade --install owasp-quiz ./helm/owasp-quiz `
   -f ./helm/owasp-quiz/values.local-kind.yaml
 ```
 
-5) Open https://quiz.localhost
+5) Open https://quiz.localhost (accept the self-signed certificate warning)
 
 > If the browser doesn’t trust your local CA, re-run `mkcert -install` and restart the browser.
 
@@ -89,9 +103,10 @@ Caddy will terminate HTTPS using its internal CA for local hosts (e.g., `quiz.lo
 ---
 
 ## Notes
-- The chart now supports pluggable annotations and `ingressClassName` (see `templates/ingress.yaml`).
+- The chart supports pluggable annotations and `ingressClassName` (see `templates/ingress.yaml`).
 - For production, set a real hostname and manage certs via cert-manager/ACME. See `docs/prod.md`.
 - If you run the frontend dev server outside the cluster, set `ALLOWED_ORIGINS` on the backend or use single-host routing via the Ingress to avoid CORS.
+- Dashboard ingress for local dev is templated in `templates/ingress-dashboard.yaml` and gated by `localDashboardIngress.enabled`.
 
 ### Optional: Manage with Portainer
 See `docs/portainer.md` to install Portainer via Helm and expose it through the same Caddy Ingress:

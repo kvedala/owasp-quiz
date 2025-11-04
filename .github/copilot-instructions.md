@@ -31,6 +31,7 @@ Use these notes to be productive immediately. Keep edits small and follow existi
 - **API calls**: Use relative `/api` by default (works via Ingress path routing). Set `VITE_API_BASE` only when running backend separately.
 - **Build**: `npm run build` → static assets in `dist/`
 - **Serving**: NGINX on port 443 with self-signed cert (`frontend/Dockerfile` generates it); health endpoint at `/health`
+ - **Favicon**: Inline URL-encoded SVG embedded in `index.html` to avoid `/favicon.ico` 404s.
 
 ## Deployment
 
@@ -40,13 +41,15 @@ Use these notes to be productive immediately. Keep edits small and follow existi
   - Backend: `GET /healthz` on port 8443 (HTTPS)
   - Frontend: `GET /health` on port 443 (HTTPS)
 - **Security**: End-to-end encryption — both services use HTTPS internally with self-signed certs; Ingress does TLS termination for external traffic.
+ - **HTTPS redirect**: For NGINX, enforce HTTPS-only via `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"`. When targeting self-signed HTTPS pods locally, disable upstream TLS verification with `nginx.ingress.kubernetes.io/proxy-ssl-verify: "false"`.
 
 **Values files**:
-- **Local dev** (Docker Desktop or kind): `values.local-docker-desktop.yaml` or `values.local-kind.yaml` (hosts: `*.localhost`, Caddy Ingress with internal CA for TLS)
+- **Local dev** (Docker Desktop or kind): `values.local-docker-desktop.yaml` or `values.local-kind.yaml` (hosts: `*.localhost`, NGINX Ingress with HTTPS-only redirect; skips upstream TLS verify for self-signed backends; enables Dashboard ingress at `k8s.localhost` when `localDashboardIngress.enabled: true`).
 - **Caddy prod**: `values.caddy.yaml` (set `ingress.host=quiz.pspservicesco.com`)
 - **NGINX prod**: `values.yaml` (default; set `ingress.className=nginx`, add cert‑manager annotations + `tls.secretName`, and `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` for backend/frontend)
 
 **Optional management UIs**:
+- **Kubernetes Dashboard** (local): Exposed via optional local Ingress at `https://k8s.localhost/` (enabled by `localDashboardIngress.enabled`). Requires a bearer token; see token generation steps in `docs/local-k8s.md`.
 - **Portainer** (`helm/portainer/`): Docs: `docs/portainer.md`. Note: subpath may have asset issues; prefer dedicated host.
 
 ## Dev workflows
@@ -56,7 +59,7 @@ Use these notes to be productive immediately. Keep edits small and follow existi
 \.\scripts\setup-local.ps1 [-RecreateCluster]
 ```
 - Works with any existing Kubernetes cluster (Docker Desktop, kind, minikube)
-- Installs Caddy Ingress, deploys chart, waits for rollouts
+- Installs NGINX Ingress, deploys chart, enables Dashboard ingress, waits for rollouts
 - On Docker Desktop: builds images locally (`docker build`)
 - On other clusters: uses GitHub Container Registry images
 
@@ -96,6 +99,8 @@ npm run dev
   - Only scrapes `/cheatsheets/*.html` paths
   - Caching (6h) to avoid hammering OWASP site
   - If questions fail, check OWASP page structure changed → update selectors
+  - Accepts both absolute (`/cheatsheets/...`) and relative (`cheatsheets/...`) links when crawling.
+  - Normalizes scraped text via `cleanText` to remove zero-width/nbsp/BOM and stray punctuation; applied to titles, category names, and facts.
 - **License/attribution**: Always retain **CC BY‑SA 4.0** attribution in UI and PDF certificate (OWASP content requirement)
 - **Security**: Both services use HTTPS internally; validate UUIDs; rate-limit endpoints; purge old attempts
 
