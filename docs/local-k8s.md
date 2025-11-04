@@ -8,7 +8,6 @@ Recommended: use the provided script with NGINX Ingress. It serves HTTPS using t
 
 URLs:
 - https://quiz.localhost
-- https://komodo.localhost
 
 The chart routes `/api` to the backend and `/` to the frontend over HTTPS internally end-to-end.
 

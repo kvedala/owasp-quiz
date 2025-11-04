@@ -47,14 +47,13 @@ Use these notes to be productive immediately. Keep edits small and follow existi
 - **NGINX prod**: `values.yaml` (default; set `ingress.className=nginx`, add cert‑manager annotations + `tls.secretName`, and `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` for backend/frontend)
 
 **Optional management UIs**:
-- **Komodo** (`helm/komodo/`): Local (`values.local.yaml` → `https://komodo.localhost`), prod dedicated host (`values.prod-caddy.yaml`), or subpath (`values.prod-caddy-subpath.yaml` → `/komodo`). Docs: `docs/komodo.md`
-- **Portainer** (`helm/portainer/`): Similar pattern. Docs: `docs/portainer.md`. Note: subpath may have asset issues; prefer dedicated host.
+- **Portainer** (`helm/portainer/`): Docs: `docs/portainer.md`. Note: subpath may have asset issues; prefer dedicated host.
 
 ## Dev workflows
 
 **Fast path** (Kubernetes):
 ```powershell
-.\scripts\setup-local.ps1 [-InstallKomodo] [-RecreateCluster]
+\.\scripts\setup-local.ps1 [-RecreateCluster]
 ```
 - Works with any existing Kubernetes cluster (Docker Desktop, kind, minikube)
 - Installs Caddy Ingress, deploys chart, waits for rollouts
@@ -81,7 +80,7 @@ npm run dev
 - `backend/Dockerfile`: Multi-stage build (golang:1-alpine → alpine:latest); generates self-signed cert; nonroot user
 - `frontend/Dockerfile`: npm build → nginx:alpine; generates self-signed cert; custom `nginx.conf` with `/health` endpoint
 
-**More docs**: `docs/local-k8s.md`, `docs/caddy.md`, `docs/komodo.md`, `docs/portainer.md`
+**More docs**: `docs/local-k8s.md`, `docs/caddy.md`, `docs/portainer.md`
 
 ## Conventions
 
@@ -107,4 +106,4 @@ npm run dev
 - **Quiz tuning**: Adjust limits in `internal/quiz/generator.go` (facts/source, questions/bundle) and bounds in `/api/generate-quiz` handler
 - **Ingress switching**: Toggle Caddy/NGINX via Helm values (`ingress.className` + `annotations`). For NGINX + cert‑manager, add issuer annotations + `tls.secretName` + backend-protocol annotations for HTTPS backends
 
-If anything is unclear (e.g., NGINX cert‑manager setup, Komodo subpath config), check `docs/*` or ask to refine this file.
+If anything is unclear (e.g., NGINX cert‑manager setup), check `docs/*` or ask to refine this file.
