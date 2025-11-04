@@ -1,9 +1,9 @@
-# When true, chart will create the namespace equal to Helm release namespace.
-createNamespace: false
+# Production values for OWASP Quiz
 
 image:
   backend: ghcr.io/your-org/owasp-quiz-backend:latest
   frontend: ghcr.io/your-org/owasp-quiz-frontend:latest
+  pullPolicy: IfNotPresent
 
 replicaCount:
   backend: 2
@@ -16,24 +16,20 @@ ingress:
   enabled: true
   className: nginx
   host: quiz.pspservicesco.com
-  # Optional separate host for Komodo UI (dev/local recommended)
-  komodoHost: komodo.localhost
+  # Dedicated host for Komodo in prod
+  komodoHost: komodo.quiz.pspservicesco.com
   tls:
     enabled: true
     secretName: quiz-tls
   komodoTls:
-    enabled: false
+    enabled: true
     secretName: komodo-tls
-  # Controller-specific annotations. Defaults target nginx; override for Caddy or others.
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
     nginx.ingress.kubernetes.io/proxy-body-size: "1m"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
-  # cert-manager integration for Let's Encrypt (prod)
   certManager:
     enabled: true
-    issuerKind: ClusterIssuer # or Issuer
+    issuerKind: ClusterIssuer
     issuerName: letsencrypt-prod
