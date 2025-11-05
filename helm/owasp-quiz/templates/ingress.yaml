@@ -13,6 +13,7 @@ metadata:
     {{- if .Values.ingress.certManager.enabled }}
     cert-manager.io/{{ if eq (default "ClusterIssuer" .Values.ingress.certManager.issuerKind) "Issuer" }}issuer{{ else }}cluster-issuer{{ end }}: {{ .Values.ingress.certManager.issuerName | quote }}
     {{- end }}
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
