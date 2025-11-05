@@ -580,6 +580,7 @@ type submitResp struct {
 	Score       int                             `json:"score"`
 	Total       int                             `json:"total"`
 	Passed      bool                            `json:"passed"`
+	Answers     map[string]int                  `json:"answers"` // User's answers
 	PerCategory map[string]map[string]int       `json:"perCategory"` // ID->{score,total}
 	CategoryMap map[string]string               `json:"categoryNames"`
 	AllCats     []string                        `json:"allCategories"`
@@ -665,7 +666,7 @@ func handleSubmit(w http.ResponseWriter, r *http.Request) {
 	perOut := map[string]map[string]int{}
 	for id, v := range per { perOut[id] = map[string]int{"score": v.Score, "total": v.Total} }
 	writeJSON(w, submitResp{ AttemptID: atID, Score: score, Total: total, Passed: passed,
-		PerCategory: perOut, CategoryMap: req.CategoryMap, AllCats: req.AllCats, Selected: req.SelectedCats })
+		Answers: req.Answers, PerCategory: perOut, CategoryMap: req.CategoryMap, AllCats: req.AllCats, Selected: req.SelectedCats })
 }
 
 func handleCertificate(w http.ResponseWriter, r *http.Request) {
