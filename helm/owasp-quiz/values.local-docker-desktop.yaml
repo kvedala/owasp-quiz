@@ -46,3 +46,8 @@ kubernetes-dashboard:
 # This creates an Ingress to service `kdash-kong-proxy` at host k8s.localhost
 localDashboardIngress:
   enabled: true
+
+# Optional: enable internal Ollama for local development
+llm:
+  enabled: true
+  model: "qwen2.5:1.5b"
