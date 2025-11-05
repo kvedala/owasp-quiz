@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+    "sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -162,9 +163,37 @@ func main() {
 
 	r.Get("/api/categories", handleCategories)
 	r.Get("/api/topics", handleTopics)
-	r.Get("/api/generate-quiz", handleGenerateQuiz)
+	r.Post("/api/start-exam", handleStartExam)
 	r.Post("/api/submit", handleSubmit)
+	r.Post("/api/warmup", handleWarmup)
 	r.Get("/api/certificate", handleCertificate)
+
+	// Optional: configure LLM enhancer for clearer stems
+	// Env vars:
+	//   QUIZ_LLM_PROVIDER = openai | ollama
+	//   QUIZ_LLM_MODEL    = model name (required)
+	//   QUIZ_LLM_ENDPOINT = base URL (optional for openai; required for ollama)
+	//   QUIZ_LLM_API_KEY  = API key (required for openai)
+	if p := strings.TrimSpace(os.Getenv("QUIZ_LLM_PROVIDER")); p != "" {
+		cfg := quiz.LLMConfig{
+			Provider: p,
+			Model:    strings.TrimSpace(os.Getenv("QUIZ_LLM_MODEL")),
+			Endpoint: strings.TrimSpace(os.Getenv("QUIZ_LLM_ENDPOINT")),
+			APIKey:   strings.TrimSpace(os.Getenv("QUIZ_LLM_API_KEY")),
+		}
+		if f := quiz.NewLLMEnhancer(cfg); f != nil {
+			quiz.SetStemEnhancer(f)
+			log.Println("LLM stem enhancer enabled (provider:", strings.ToLower(p), ")")
+		} else {
+			log.Println("LLM stem enhancer not enabled: incomplete configuration")
+		}
+	}
+
+    // Fire-and-forget prewarm of caches and common pages
+    go func(){
+        defer func(){ recover() }()
+        prewarm()
+    }()
 
 	port := getenv("PORT", "8080")
 	tlsCert := os.Getenv("TLS_CERT")
@@ -180,6 +209,108 @@ func main() {
 }
 
 // --- Handlers ---
+
+// Server-side exam start: receives user info, generates quiz, returns quiz and metadata
+type startExamReq struct {
+	Name        string   `json:"name"`
+	Email       string   `json:"email"`
+	JobTitle    string   `json:"jobTitle"`
+	Department  string   `json:"department"`
+	Count       int      `json:"count"`
+	Seed        string   `json:"seed"`
+	Categories  []string `json:"categories"`
+}
+
+type startExamResp struct {
+	Quiz        quiz.Quiz          `json:"quiz"`
+	AllCats     []string           `json:"allCategories"`
+	Selected    []string           `json:"selectedCategories"`
+	CategoryMap map[string]string  `json:"categoryNames"`
+}
+
+func handleStartExam(w http.ResponseWriter, r *http.Request) {
+	var req startExamReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", 400); return
+	}
+	name := sanitizeText(req.Name)
+	email := sanitizeText(req.Email)
+	jobTitle := sanitizeText(req.JobTitle)
+	department := sanitizeText(req.Department)
+	if !validateName(name) { http.Error(w, "invalid name", 400); return }
+	if !validateEmail(email) { http.Error(w, "invalid email", 400); return }
+	if !validateText(jobTitle) { http.Error(w, "invalid job title", 400); return }
+	if !validateText(department) { http.Error(w, "invalid department", 400); return }
+
+	count := req.Count
+	if count < 5 { count = 5 }
+	if count > 50 { count = 50 }
+	seed := time.Now().UnixNano()
+	if req.Seed != "" {
+		if v, err := strconv.ParseInt(req.Seed, 10, 64); err == nil {
+			seed = v
+		}
+	}
+	cats, err := getTop10()
+	if err != nil { http.Error(w, "failed to load categories", 500); return }
+	allIDs := make([]string, 0, len(cats))
+	nameByID := map[string]string{}
+	for _, c := range cats { allIDs = append(allIDs, c.ID); nameByID[c.ID] = c.Name }
+	sort.Strings(allIDs)
+	selected := req.Categories
+	if len(selected) == 0 { selected = allIDs }
+
+	// Build distractor pool
+	var poolMu sync.Mutex
+	var distractorPool []string
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	totalPages := 0
+	for _, catID := range selected {
+		cat := findCat(cats, catID)
+		if len(cat.CheatSheets) == 0 { continue }
+		url := cat.CheatSheets[0].URL
+		if totalPages >= 8 { break }
+		totalPages++
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(u string) {
+			defer wg.Done(); defer func(){ <-sem }()
+			if facts, err := scraper.PullFacts(httpClient, u); err == nil {
+				poolMu.Lock(); distractorPool = append(distractorPool, facts...); poolMu.Unlock()
+			}
+		}(url)
+	}
+	wg.Wait()
+	distractorPool = quiz.MergePool(distractorPool)
+
+	// Build questions
+	var bundles [][]quiz.Question
+	totalQs := 0
+	llmFallbackUsed := false
+	llmTimeoutMs := atoiDefault(getenv("QUIZ_LLM_FAST_TIMEOUT_MS", "1800"), 1800)
+	llmTimeout := time.Duration(llmTimeoutMs) * time.Millisecond
+outer:
+	for _, catID := range selected {
+		if totalQs >= count { break }
+		cat := findCat(cats, catID)
+		for idx, cs := range cat.CheatSheets {
+			if totalQs >= count { break outer }
+			facts, err := scraper.PullFacts(httpClient, cs.URL)
+			if err != nil || len(facts) == 0 { continue }
+			qs, err := quiz.BuildMCQ(cat.ID, cat.Name, cs.Title, cs.URL, facts, distractorPool, seed+int64(idx), llmTimeout, &llmFallbackUsed)
+			if err == nil && len(qs) > 0 {
+				bundles = append(bundles, qs)
+				totalQs += len(qs)
+				break
+			}
+		}
+	}
+	q := quiz.AssembleQuiz(uuid.NewString(), bundles...)
+	if len(q.Questions) == 0 { http.Error(w, "unable to generate questions", 500); return }
+	if len(q.Questions) > count { q.Questions = q.Questions[:count] }
+	writeJSON(w, startExamResp{ Quiz: q, AllCats: allIDs, Selected: selected, CategoryMap: nameByID })
+}
 
 func handleCategories(w http.ResponseWriter, r *http.Request) {
 	cats, err := getTop10()
@@ -228,35 +359,207 @@ func handleGenerateQuiz(w http.ResponseWriter, r *http.Request) {
 	if raw != "" { for _, tok := range strings.Split(raw, ",") { id := strings.TrimSpace(tok); if _, ok := nameByID[id]; ok { selected = append(selected, id) } } }
 	if len(selected) == 0 { selected = allIDs }
 
-	// Build distractor pool
+	// Build distractor pool with limited parallelism (concurrency=4)
+	// Limit total source pages to reduce latency (max 8 pages, ~1 per category)
+	var poolMu sync.Mutex
 	var distractorPool []string
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	totalPages := 0
 	for _, catID := range selected {
 		cat := findCat(cats, catID)
-		for i := 0; i < min(2, len(cat.CheatSheets)); i++ {
-			facts, _ := scraper.PullFacts(httpClient, cat.CheatSheets[i].URL)
-			distractorPool = append(distractorPool, facts...)
-		}
+		if len(cat.CheatSheets) == 0 { continue }
+		idx := 0
+		url := cat.CheatSheets[idx].URL
+		if totalPages >= 8 { break }
+		totalPages++
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(u string) {
+			defer wg.Done(); defer func(){ <-sem }()
+			if facts, err := scraper.PullFacts(httpClient, u); err == nil {
+				poolMu.Lock(); distractorPool = append(distractorPool, facts...); poolMu.Unlock()
+			}
+		}(url)
 	}
+	wg.Wait()
 	distractorPool = quiz.MergePool(distractorPool)
 
-	// Build questions category-by-category
+	// Build questions category-by-category, stop early when reaching count
 	var bundles [][]quiz.Question
+	totalQs := 0
+	llmFallbackUsed := false
+	llmTimeoutMs := atoiDefault(getenv("QUIZ_LLM_FAST_TIMEOUT_MS", "1800"), 1800)
+	llmTimeout := time.Duration(llmTimeoutMs) * time.Millisecond
 outer:
 	for _, catID := range selected {
+		if totalQs >= count { break }
 		cat := findCat(cats, catID)
 		for idx, cs := range cat.CheatSheets {
+			if totalQs >= count { break outer }
 			facts, err := scraper.PullFacts(httpClient, cs.URL)
 			if err != nil || len(facts) == 0 { continue }
-			qs, err := quiz.BuildMCQ(cat.ID, cat.Name, cs.Title, cs.URL, facts, distractorPool, seed+int64(idx))
-			if err == nil && len(qs) > 0 { bundles = append(bundles, qs) }
-			if len(bundles) >= 6 { continue outer }
+			qs, err := quiz.BuildMCQ(cat.ID, cat.Name, cs.Title, cs.URL, facts, distractorPool, seed+int64(idx), llmTimeout, &llmFallbackUsed)
+			if err == nil && len(qs) > 0 {
+				bundles = append(bundles, qs)
+				totalQs += len(qs)
+                // Use at most one sheet per category to reduce latency
+                break
+			}
+			if len(bundles) >= 6 { // guardrail to bound variety work
+				if totalQs >= count { break outer }
+			}
 		}
 	}
 
 	q := quiz.AssembleQuiz(uuid.NewString(), bundles...)
 	if len(q.Questions) == 0 { http.Error(w, "unable to generate questions", 500); return }
 	if len(q.Questions) > count { q.Questions = q.Questions[:count] }
+	// Set LLM usage header for frontend hints
+	if quiz.HasStemEnhancer() {
+		if llmFallbackUsed {
+			w.Header().Set("X-Quiz-LLM", "fallback")
+		} else {
+			w.Header().Set("X-Quiz-LLM", "used")
+		}
+	}
 	writeJSON(w, generateResp{ Quiz: q, AllCats: allIDs, Selected: selected, CategoryMap: nameByID })
+}
+
+// --- Streaming generate-quiz via Server-Sent Events (SSE) ---
+func handleGenerateQuizStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	send := func(evt string, v any) {
+		b, _ := json.Marshal(v)
+		_, _ = w.Write([]byte("event: "+evt+"\n"))
+		_, _ = w.Write([]byte("data: "+string(b)+"\n\n"))
+		flusher.Flush()
+	}
+	ctx := r.Context()
+
+	send("stage", map[string]any{"stage":"connecting"})
+
+	// Parse inputs (same as non-streaming)
+	count := atoiDefault(r.URL.Query().Get("count"), 20)
+	if count < 5 { count = 5 }
+	if count > 50 { count = 50 }
+	seed := time.Now().UnixNano()
+	if s := r.URL.Query().Get("seed"); s != "" {
+		if v, err := strconv.ParseInt(s, 10, 64); err == nil { seed = v }
+	}
+
+	cats, err := getTop10()
+	if err != nil { send("error", map[string]string{"message":"failed to load categories"}); return }
+	allIDs := make([]string, 0, len(cats))
+	nameByID := map[string]string{}
+	for _, c := range cats { allIDs = append(allIDs, c.ID); nameByID[c.ID] = c.Name }
+	sort.Strings(allIDs)
+
+	raw := strings.TrimSpace(r.URL.Query().Get("categories"))
+	var selected []string
+	if raw != "" { for _, tok := range strings.Split(raw, ",") { id := strings.TrimSpace(tok); if _, ok := nameByID[id]; ok { selected = append(selected, id) } } }
+	if len(selected) == 0 { selected = allIDs }
+
+	// Build distractor pool
+	send("stage", map[string]any{"stage":"extracting"})
+	var poolMu sync.Mutex
+	var distractorPool []string
+	sem := make(chan struct{}, 4)
+	var wg sync.WaitGroup
+	totalPages := 0
+	extracted := 0
+	for _, catID := range selected {
+		if ctx.Err() != nil { return }
+		cat := findCat(cats, catID)
+		if len(cat.CheatSheets) == 0 { continue }
+		url := cat.CheatSheets[0].URL
+		if totalPages >= 8 { break }
+		totalPages++
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(u string) {
+			defer wg.Done(); defer func(){ <-sem }()
+			if facts, err := scraper.PullFacts(httpClient, u); err == nil {
+				poolMu.Lock(); distractorPool = append(distractorPool, facts...); extracted++; poolMu.Unlock()
+				send("progress", map[string]any{"stage":"extracting","pages":extracted})
+			}
+		}(url)
+	}
+	wg.Wait()
+	distractorPool = quiz.MergePool(distractorPool)
+
+	// Build questions
+	send("stage", map[string]any{"stage":"generating"})
+	var bundles [][]quiz.Question
+	totalQs := 0
+	llmFallbackUsed := false
+	llmTimeoutMs := atoiDefault(getenv("QUIZ_LLM_FAST_TIMEOUT_MS", "1800"), 1800)
+	llmTimeout := time.Duration(llmTimeoutMs) * time.Millisecond
+outer:
+	for _, catID := range selected {
+		if ctx.Err() != nil { return }
+		if totalQs >= count { break }
+		cat := findCat(cats, catID)
+		for idx, cs := range cat.CheatSheets {
+			if totalQs >= count { break outer }
+			if ctx.Err() != nil { return }
+			facts, err := scraper.PullFacts(httpClient, cs.URL)
+			if err != nil || len(facts) == 0 { continue }
+			qs, err := quiz.BuildMCQ(cat.ID, cat.Name, cs.Title, cs.URL, facts, distractorPool, seed+int64(idx), llmTimeout, &llmFallbackUsed)
+			if err == nil && len(qs) > 0 {
+				bundles = append(bundles, qs)
+				totalQs += len(qs)
+				send("progress", map[string]any{"stage":"generating","questions": totalQs})
+				break
+			}
+		}
+	}
+
+	q := quiz.AssembleQuiz(uuid.NewString(), bundles...)
+	if len(q.Questions) == 0 { send("error", map[string]string{"message":"unable to generate questions"}); return }
+	if len(q.Questions) > count { q.Questions = q.Questions[:count] }
+
+	// Announce LLM mode
+	if quiz.HasStemEnhancer() {
+		if llmFallbackUsed { send("llm", map[string]string{"mode":"fallback"}) } else { send("llm", map[string]string{"mode":"used"}) }
+	}
+	send("stage", map[string]any{"stage":"finalizing"})
+	payload := generateResp{ Quiz: q, AllCats: allIDs, Selected: selected, CategoryMap: nameByID }
+	send("done", payload)
+}
+
+// Warm up caches and optionally the first few cheat sheet pages
+func handleWarmup(w http.ResponseWriter, r *http.Request) {
+	go func(){ defer func(){ recover() }(); prewarm() }()
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("warming"))
+}
+
+func prewarm() {
+	// Fetch top10 and index
+	if _, err := getTop10(); err != nil { log.Println("prewarm top10 error:", err) }
+	if _, err := getIndex(); err != nil { log.Println("prewarm index error:", err) }
+	cats, err := getTop10()
+	if err != nil { return }
+	// Pull facts for the first few pages to populate cache
+	n := 0
+	for _, c := range cats {
+		if n >= 8 { break }
+		if len(c.CheatSheets) == 0 { continue }
+		url := c.CheatSheets[0].URL
+		if _, err := scraper.PullFacts(httpClient, url); err == nil { n++ }
+		// small delay between pages
+		time.Sleep(150 * time.Millisecond)
+	}
 }
 
 type submitReq struct {
