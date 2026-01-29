@@ -44,13 +44,12 @@ Use these notes to be productive immediately. Keep edits small and follow existi
  - **HTTPS redirect**: For NGINX, enforce HTTPS-only via `nginx.ingress.kubernetes.io/force-ssl-redirect: "true"`. When targeting self-signed HTTPS pods locally, disable upstream TLS verification with `nginx.ingress.kubernetes.io/proxy-ssl-verify: "false"`.
 
 **Values files**:
-- **Local dev** (Docker Desktop or kind): `values.local-docker-desktop.yaml` or `values.local-kind.yaml` (hosts: `*.localhost`, NGINX Ingress with HTTPS-only redirect; skips upstream TLS verify for self-signed backends; enables Dashboard ingress at `k8s.localhost` when `localDashboardIngress.enabled: true`).
-- **Caddy prod**: `values.caddy.yaml` (set `ingress.host=quiz.opencompany.example`)
-- **NGINX prod**: `values.yaml` (default; set `ingress.className=nginx`, add cert‑manager annotations + `tls.secretName`, and `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` for backend/frontend)
+- **Local dev**: `values.local-docker-desktop.yaml` (hosts: `*.localhost`, NGINX Ingress with HTTPS-only redirect; skips upstream TLS verify for self-signed backends)
+- **Production**: `values.yaml` (default; set `ingress.className=nginx`, add cert‑manager annotations + `tls.secretName`, and `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` for backend/frontend)
+- **Production (alternate)**: `values.prod.yaml` (customized for production deployment)
 
 **Optional management UIs**:
-- **Kubernetes Dashboard** (local): Exposed via optional local Ingress at `https://k8s.localhost/` (enabled by `localDashboardIngress.enabled`). Requires a bearer token; see token generation steps in `docs/local-k8s.md`.
-- **Portainer** (`helm/portainer/`): Docs: `docs/portainer.md`. Note: subpath may have asset issues; prefer dedicated host.
+- None currently configured (Kubernetes Dashboard removed).
 
 ## Dev workflows
 
@@ -103,6 +102,16 @@ npm run dev
   - Normalizes scraped text via `cleanText` to remove zero-width/nbsp/BOM and stray punctuation; applied to titles, category names, and facts.
 - **License/attribution**: Always retain **CC BY‑SA 4.0** attribution in UI and PDF certificate (OWASP content requirement)
 - **Security**: Both services use HTTPS internally; validate UUIDs; rate-limit endpoints; purge old attempts
+
+## Cloud LLM vs Local LLM
+
+- Runtime stems: Enable by setting env vars in the backend pod:
+  - `QUIZ_LLM_PROVIDER=openai`
+  - `QUIZ_LLM_MODEL` (e.g., `mistralai/mistral-7b-instruct` on OpenRouter)
+  - `QUIZ_LLM_ENDPOINT` (e.g., `https://openrouter.ai/api`)
+  - `QUIZ_LLM_API_KEY` (inject via Kubernetes Secret)
+- Question bank generation: The Job/CronJob respects `cloudLlm.enabled` Helm values to inject the same envs and call the OpenAI-compatible API directly (no ephemeral Ollama).
+- Local LLM: Keep `llm.enabled=true` to use Ollama with `llm.model`, or set both `llm.enabled=false` and `cloudLlm.enabled=true` to go fully cloud.
 
 ## Common extensions
 

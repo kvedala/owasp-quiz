@@ -23,6 +23,41 @@ spec:
           value: "8443"
         - name: ALLOWED_ORIGINS
           value: "http://{{ .Values.ingress.host }},https://{{ .Values.ingress.host }},http://localhost:5173,https://localhost:5173"
+        {{- if and .Values.cloudLlm.enabled (not .Values.questionBank.enabled) }}
+        # Cloud LLM (OpenAI-compatible)
+        - name: QUIZ_LLM_PROVIDER
+          value: {{ default "openai" .Values.cloudLlm.provider | quote }}
+        - name: QUIZ_LLM_MODEL
+          value: {{ .Values.cloudLlm.model | quote }}
+        {{- if .Values.cloudLlm.endpoint }}
+        - name: QUIZ_LLM_ENDPOINT
+          value: {{ .Values.cloudLlm.endpoint | quote }}
+        {{- end }}
+        {{- if .Values.cloudLlm.apiKeySecretName }}
+        - name: QUIZ_LLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.cloudLlm.apiKeySecretName | quote }}
+              key: {{ default "apiKey" .Values.cloudLlm.apiKeySecretKey | quote }}
+        {{- end }}
+        - name: QUIZ_LLM_FAST_TIMEOUT_MS
+          value: {{ default 1800 .Values.cloudLlm.fastTimeoutMs | quote }}
+        - name: QUIZ_LLM_WARMUP_TIMEOUT_MS
+          value: {{ default 5000 .Values.cloudLlm.warmupTimeoutMs | quote }}
+        {{- else if and .Values.llm.enabled (not .Values.questionBank.enabled) }}
+        # Local Ollama LLM (when bank disabled)
+        - name: QUIZ_LLM_PROVIDER
+          value: "ollama"
+        - name: QUIZ_LLM_MODEL
+          value: {{ .Values.llm.model | quote }}
+        - name: QUIZ_LLM_ENDPOINT
+          value: {{ printf "http://%s:%v" .Values.llm.service.name .Values.llm.service.port | quote }}
+        - name: QUIZ_LLM_FAST_TIMEOUT_MS
+          value: {{ default 1800 .Values.llm.fastTimeoutMs | quote }}
+        - name: QUIZ_LLM_WARMUP_TIMEOUT_MS
+          value: {{ default 5000 .Values.llm.warmupTimeoutMs | quote }}
+        {{- end }}
+        volumeMounts: []
         resources:
           requests: { cpu: "100m", memory: "128Mi" }
           limits: { cpu: "500m", memory: "512Mi" }

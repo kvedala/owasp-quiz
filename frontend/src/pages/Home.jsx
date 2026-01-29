@@ -1,10 +1,22 @@
-
 import { useEffect, useState } from "react";
+import { getCategories, generateQuiz } from "../api";
 
 // Input sanitization function
 function sanitizeInput(input) {
   if (typeof input !== 'string') return '';
   return input.trim().substring(0, 200).replace(/[<>]/g, '');
+}
+
+// Less aggressive sanitizer for name field to allow typing spaces naturally.
+// We avoid trimming trailing spaces during input so the user can insert a space
+// between first and last name; final trim happens before submit.
+function sanitizeNameInput(input) {
+  if (typeof input !== 'string') return '';
+  // Remove angle brackets only; preserve spaces as typed
+  let cleaned = input.replace(/[<>]/g, '');
+  // Limit length to 100 (matches backend name length constraint)
+  if (cleaned.length > 100) cleaned = cleaned.substring(0, 100);
+  return cleaned;
 }
 
 function validateEmail(email) {
@@ -13,67 +25,62 @@ function validateEmail(email) {
   return email.length <= 254 && emailRegex.test(email);
 }
 
-async function fetchCategories() {
-  const res = await fetch(`/api/categories`);
-  if (!res.ok) throw new Error("failed to load categories");
-  return res.json();
-}
-
 export default function Home({ candidate, setCandidate, onStart }) {
   // user info
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState("");
 
-  // categories
-  const [categories, setCategories] = useState([]); // [{id,name,cheatSheets:[]}]
-  const [selected, setSelected] = useState([]);     // ["A01:2021", ...]
-  const [count, setCount] = useState(20);
-  const [seed, setSeed] = useState("");
+  const [categories, setCategories] = useState([]); // [{id,name}]
+  const [selected, setSelected] = useState([]);     // ["A01", ...]
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => { fetchCategories().then(setCategories).catch(console.error); }, []);
+  useEffect(() => { 
+    getCategories().then(cats => {
+      setCategories(cats);
+      // Set all as default selected
+      setSelected(cats.map(c => c.id));
+    }).catch(console.error); 
+  }, []);
 
   function toggleCat(id) {
     setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
   }
 
   async function start() {
+    setErrorMsg("");
     // Validate inputs
     const sanitizedName = sanitizeInput(candidate);
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedJobTitle = sanitizeInput(jobTitle);
     const sanitizedDepartment = sanitizeInput(department);
-    
     if (!sanitizedName || sanitizedName.length < 2) {
       alert('Please enter a valid name (at least 2 characters)');
       return;
     }
-    
     if (sanitizedEmail && !validateEmail(sanitizedEmail)) {
       alert('Please enter a valid email address');
       return;
     }
     
-    const qs = new URLSearchParams();
-    if (count) qs.set("count", Math.min(Math.max(count, 5), 50)); // Clamp between 5-50
-    if (seed) qs.set("seed", sanitizeInput(seed));
-    if (selected.length > 0) qs.set("categories", selected.join(","));
-    
+    setLoading(true);
     try {
-      const res = await fetch(`/api/generate-quiz?` + qs.toString());
-      if (!res.ok) throw new Error("failed to generate quiz");
-      const payload = await res.json();
-      onStart({
-        quizData: payload,
-        user: {
-          name: sanitizedName,
-          email: sanitizedEmail,
-          jobTitle: sanitizedJobTitle,
-          department: sanitizedDepartment,
-        }
+      // Generate quiz locally with selected categories
+      const quizData = await generateQuiz({ 
+        categories: selected.length > 0 ? selected : categories.map(c => c.id),
+        count: 20
       });
-    } catch (error) {
-      alert('Failed to generate quiz. Please try again.');
+      
+      onStart({
+        quizData,
+        user: { name: sanitizedName, email: sanitizedEmail, jobTitle: sanitizedJobTitle, department: sanitizedDepartment }
+      });
+    } catch (e) {
+      console.error(e);
+      setErrorMsg('Failed to generate quiz. Please try again.');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -81,13 +88,25 @@ export default function Home({ candidate, setCandidate, onStart }) {
 
   return (
     <div>
+      {loading && (
+        <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999}}>
+          <div style={{textAlign:'center'}}>
+            <div className="spinner" style={{margin:'0 auto 12px', width:36, height:36, border:'3px solid #ddd', borderTopColor:'#333', borderRadius:'50%', animation:'spin 1s linear infinite'}}/>
+            <div style={{fontSize:16, fontWeight:600}}>Generating quiz…</div>
+          </div>
+          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      )}
       <h3>Candidate Information</h3>
       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
         <div>
           <label>Name</label><br/>
           <input 
+            type="text"
+            name="name"
+            autoComplete="name"
             value={candidate} 
-            onChange={e=>setCandidate(sanitizeInput(e.target.value))} 
+            onChange={e=>setCandidate(sanitizeNameInput(e.target.value))} 
             placeholder="Full name" 
             maxLength="100"
             required
@@ -97,6 +116,8 @@ export default function Home({ candidate, setCandidate, onStart }) {
           <label>Email</label><br/>
           <input 
             type="email"
+            name="email"
+            autoComplete="email"
             value={email} 
             onChange={e=>setEmail(sanitizeInput(e.target.value))} 
             placeholder="name@company.com" 
@@ -106,6 +127,9 @@ export default function Home({ candidate, setCandidate, onStart }) {
         <div>
           <label>Job Title</label><br/>
           <input 
+            type="text"
+            name="jobTitle"
+            autoComplete="organization-title"
             value={jobTitle} 
             onChange={e=>setJobTitle(sanitizeInput(e.target.value))} 
             placeholder="CTO" 
@@ -115,6 +139,9 @@ export default function Home({ candidate, setCandidate, onStart }) {
         <div>
           <label>Department</label><br/>
           <input 
+            type="text"
+            name="department"
+            autoComplete="organization"
             value={department} 
             onChange={e=>setDepartment(sanitizeInput(e.target.value))} 
             placeholder="Engineering" 
@@ -131,22 +158,20 @@ export default function Home({ candidate, setCandidate, onStart }) {
         {categories.map(c => (
           <label key={c.id} style={{border:"1px solid #ddd", padding:8, borderRadius:6}}>
             <input type="checkbox" checked={selected.includes(c.id)} onChange={()=>toggleCat(c.id)} />{" "}
-            <strong>{c.id}</strong> – {c.name} <span style={{fontSize:12, color:"#666"}}>({c.cheatSheets.length} sheets)</span>
+            <strong>{c.id}</strong> – {c.name}
           </label>
         ))}
       </div>
 
-      <div style={{display:"flex", gap:16, alignItems:"center"}}>
-        <div>
-          <label># Questions</label><br/>
-          <input type="number" min={5} max={30} value={count} onChange={(e)=>setCount(parseInt(e.target.value || 20))} />
-        </div>
-        <div>
-          <label>Seed (optional)</label><br/>
-          <input value={seed} onChange={(e)=>setSeed(e.target.value)} />
-        </div>
-        <button style={{marginLeft:"auto"}} onClick={start}>Start Exam</button>
+      <div style={{display:"flex", gap:16, alignItems:"center", marginTop:12}}>
+        <button onClick={start}>Start Exam</button>
       </div>
+      {errorMsg && (
+        <div style={{marginTop:12, display:'flex', gap:12, alignItems:'center'}}>
+          <span style={{color:'#c00'}}>{errorMsg}</span>
+          <button onClick={start}>Retry</button>
+        </div>
+      )}
 
       <details style={{marginTop:16}}>
         <summary>Show all available categories</summary>

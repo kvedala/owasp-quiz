@@ -1,5 +1,6 @@
 
-import { certificateURL } from "../api";
+import { useMetadata } from "../hooks/useMetadata";
+import { generateCertificatePDF, downloadCertificate } from "../utils/pdfGenerator";
 
 // Sanitize text to prevent XSS
 function sanitizeText(text) {
@@ -17,14 +18,37 @@ function sanitizeText(text) {
 }
 
 export default function Results({ candidate, quiz, result, categoryNames, allCats, selectedCats, onRestart }) {
+  const { metadata } = useMetadata();
   const pass = result.passed;
+  const passingThreshold = 75; // Standard threshold; could be made configurable via metadata
+
+  // Build a lookup for answers
+  const answerMap = {};
+  if (quiz && quiz.questions) {
+    for (const q of quiz.questions) {
+      answerMap[q.id] = q.options[q.answerIndex];
+    }
+  }
+
+  function handleDownloadCertificate() {
+    const pdfBlob = generateCertificatePDF(
+      candidate,
+      result.score,
+      result.total,
+      result.passed,
+      result.perCategory,
+      categoryNames
+    );
+    const fileName = `OWASP_Quiz_${candidate.replace(/\s+/g, "_")}_${new Date().toISOString().split('T')[0]}.pdf`;
+    downloadCertificate(pdfBlob, fileName);
+  }
 
   return (
     <div>
       <h3>Results</h3>
       <p>
         {pass ? "✅ Passed" : "❌ Not Passed"} — Score: <b>{result.score}/{result.total}</b>
-        {" "}({Math.round(result.score*100/result.total)}%). Threshold: <b>≥ 75%</b>.
+        {" "}({Math.round(result.score*100/result.total)}%). Threshold: <b>≥ {passingThreshold}%</b>.
       </p>
 
       <h4>Categories</h4>
@@ -55,10 +79,28 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
         </tbody>
       </table>
 
+      <h4>Review Incorrect Answers</h4>
+      <ul style={{marginTop:8, fontSize:15}}>
+        {quiz?.questions?.map((q, idx) => {
+          const userAns = result.answers?.[q.id];
+          if (userAns == null || userAns === q.answerIndex) return null;
+          return (
+            <li key={q.id} style={{marginBottom:10}}>
+              <b>Q{idx+1}:</b> <span>{sanitizeText(q.stem)}</span><br/>
+              <span style={{color:'#c00'}}>Your answer:</span> <span>{sanitizeText(q.options[userAns])}</span><br/>
+              <span style={{color:'#080'}}>Correct answer:</span> <span>{sanitizeText(q.options[q.answerIndex])}</span>
+            </li>
+          );
+        })}
+        {quiz?.questions?.filter(q => result.answers?.[q.id] != null && result.answers[q.id] !== q.answerIndex).length === 0 && (
+          <li>All answers correct!</li>
+        )}
+      </ul>
+
       <div style={{display:"flex", gap:12, marginTop:12}}>
-        <a className="btn" href={certificateURL(result.attemptId, sanitizeText(candidate))} target="_blank" rel="noreferrer">
+        <button onClick={handleDownloadCertificate}>
           Download Certificate (PDF)
-        </a>
+        </button>
         <button onClick={onRestart}>Take another exam</button>
       </div>
     </div>

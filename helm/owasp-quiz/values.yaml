@@ -4,6 +4,13 @@ createNamespace: false
 image:
   backend: ghcr.io/your-org/owasp-quiz-backend:latest
   frontend: ghcr.io/your-org/owasp-quiz-frontend:latest
+  # Legacy format - keep for compatibility but prefer backend.image.* for new deployments
+
+backend:
+  image:
+    repository: ghcr.io/your-org/owasp-quiz-backend
+    tag: latest
+    pullPolicy: IfNotPresent
 
 replicaCount:
   backend: 2
@@ -12,35 +19,71 @@ replicaCount:
 service:
   type: ClusterIP
 
-# Kubernetes Dashboard (controlled via local values)
-kubernetes-dashboard:
-  enabled: false
-  ingress:
-    enabled: false
-    className: nginx
-    hosts: []
-    annotations: {}
-  serviceAccount:
-    create: true
-    name: admin-user
-
 ingress:
   enabled: true
-  className: nginx
-  host: quiz.opencompany.example
+  className: traefik
+  host: developer-quiz.opencompany.example
   tls:
     enabled: true
     secretName: quiz-tls
-  # Controller-specific annotations. Defaults target nginx; override for Caddy or others.
   annotations:
-    kubernetes.io/ingress.class: nginx
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
-    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
-    nginx.ingress.kubernetes.io/rate-limit: "100"
-    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
   # cert-manager integration for Let's Encrypt (prod)
   certManager:
     enabled: true
     issuerKind: ClusterIssuer # or Issuer
     issuerName: letsencrypt-prod
+
+# Traefik ingress controller (disabled in prod, assumed pre-installed)
+traefik:
+  enabled: false
+
+# Optional internal LLM (Ollama) for enhancing quiz stems
+llm:
+  enabled: false
+  standaloneDeployment: false # Do not deploy a persistent LLM; CronJob orchestrates ephemeral one
+  # Model to pull and serve, e.g., "llama3.2:3b" or "qwen2.5:3b"
+  model: "qwen2.5:3b"
+  image: "ollama/ollama:latest"
+  imagePullPolicy: IfNotPresent
+  # Backend LLM request timeout for fast path (ms). Increase if first call races model load.
+  fastTimeoutMs: 1800
+  # Backend LLM warmup timeout (ms) used during server prewarm
+  warmupTimeoutMs: 5000
+  service:
+    name: "llm-ollama"
+    port: 11434
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # Use emptyDir for model cache by default; for persistence set to a PVC
+  # No model cache PVC by default (ephemeral LLM)
+
+# Cloud LLM (OpenAI-compatible) for stems and/or bank generation
+cloudLlm:
+  enabled: true
+  # provider: openai (OpenAI-compatible chat API). Works with OpenRouter, Together, etc.
+  provider: openai
+  # Example (OpenRouter): endpoint: https://openrouter.ai/api
+  endpoint: "https://openrouter.ai/api"
+  model: "tngtech/deepseek-r1t2-chimera:free"
+  # Reference a Kubernetes Secret to source API key. If empty, no API key will be set.
+  apiKeySecretName: "openrouter-api-new"
+  apiKeySecretKey: "apiKey"
+  # Timeouts similar to local llm settings
+  fastTimeoutMs: 1800
+  warmupTimeoutMs: 5000
+
+# Question Bank: Pre-generated questions baked into Docker image
+questionBank:
+  enabled: false
+  path: "/data/questionbank/questions.json"
+
