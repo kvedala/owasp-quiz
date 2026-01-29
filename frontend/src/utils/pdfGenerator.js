@@ -8,9 +8,10 @@ import { jsPDF } from "jspdf";
  * @param {bool} passed - Whether passed (>= 75%)
  * @param {object} perCategory - Per-category scores {catId: {score, total}}
  * @param {object} categoryNames - Category name mapping {catId: name}
+ * @param {object} extraDetails - Optional environment details
  * @returns {Blob} PDF blob that can be downloaded
  */
-export function generateCertificatePDF(name, score, total, passed, perCategory, categoryNames) {
+export function generateCertificatePDF(name, score, total, passed, perCategory, categoryNames, extraDetails = {}) {
   const pageWidth = 210; // A4 width in mm
   const pageHeight = 297; // A4 height in mm
   
@@ -58,6 +59,52 @@ export function generateCertificatePDF(name, score, total, passed, perCategory, 
   yPos += 6;
   doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, yPos);
   yPos += 10;
+
+  const { localTime, utcTime, timeZone, userAgent, location } = extraDetails || {};
+  const hasEnvDetails = localTime || utcTime || timeZone || userAgent || (location && (location.latitude || location.longitude));
+
+  if (hasEnvDetails) {
+    doc.setFont(undefined, "bold");
+    doc.setFontSize(11);
+    doc.text("Environment Details", margin, yPos);
+    yPos += 7;
+
+    doc.setFont(undefined, "normal");
+    doc.setFontSize(9);
+
+    if (localTime) {
+      doc.text(`Local Time: ${localTime}`, margin, yPos);
+      yPos += 5;
+    }
+
+    if (utcTime) {
+      doc.text(`UTC Time: ${utcTime}`, margin, yPos);
+      yPos += 5;
+    }
+
+    if (timeZone) {
+      doc.text(`Timezone: ${timeZone}`, margin, yPos);
+      yPos += 5;
+    }
+
+    if (userAgent) {
+      const uaLines = doc.splitTextToSize(`Browser/Device: ${userAgent}`, contentWidth);
+      doc.text(uaLines, margin, yPos);
+      yPos += uaLines.length * 4 + 1;
+    }
+
+    if (location && (location.latitude || location.longitude)) {
+      const accuracyText = location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : "";
+      doc.text(
+        `Location: ${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}${accuracyText}`,
+        margin,
+        yPos
+      );
+      yPos += 6;
+    }
+
+    yPos += 4;
+  }
 
   // Score summary
   doc.setFont(undefined, "bold");

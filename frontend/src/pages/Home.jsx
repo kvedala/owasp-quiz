@@ -89,16 +89,15 @@ export default function Home({ candidate, setCandidate, onStart }) {
   return (
     <div>
       {loading && (
-        <div style={{position:'fixed', inset:0, background:'rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999}}>
-          <div style={{textAlign:'center'}}>
-            <div className="spinner" style={{margin:'0 auto 12px', width:36, height:36, border:'3px solid #ddd', borderTopColor:'#333', borderRadius:'50%', animation:'spin 1s linear infinite'}}/>
-            <div style={{fontSize:16, fontWeight:600}}>Generating quiz…</div>
+        <div className="loading-overlay">
+          <div className="loading-content">
+            <div className="loading-spinner" />
+            <div className="loading-text">Generating quiz…</div>
           </div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
       <h3>Candidate Information</h3>
-      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:12}}>
+      <div className="form-grid">
         <div>
           <label>Name</label><br/>
           <input 
@@ -150,32 +149,32 @@ export default function Home({ candidate, setCandidate, onStart }) {
         </div>
       </div>
 
-      <h3 style={{marginTop:16}}>Select Categories (OWASP Top 10)</h3>
-      <p style={{fontSize:12, marginTop:-8}}>
+      <h3 className="section-title">Select Categories (OWASP Top 10)</h3>
+      <p className="section-help">
         From OWASP Top‑10 mapping to official Cheat Sheets. Leave empty to include all categories.
       </p>
-      <div style={{display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6, marginBottom:12}}>
+      <div className="category-grid">
         {categories.map(c => (
-          <label key={c.id} style={{border:"1px solid #ddd", padding:8, borderRadius:6}}>
+          <label key={c.id} className="category-item">
             <input type="checkbox" checked={selected.includes(c.id)} onChange={()=>toggleCat(c.id)} />{" "}
             <strong>{c.id}</strong> – {c.name}
           </label>
         ))}
       </div>
 
-      <div style={{display:"flex", gap:16, alignItems:"center", marginTop:12}}>
+      <div className="form-actions">
         <button onClick={start}>Start Exam</button>
       </div>
       {errorMsg && (
-        <div style={{marginTop:12, display:'flex', gap:12, alignItems:'center'}}>
-          <span style={{color:'#c00'}}>{errorMsg}</span>
+        <div className="error-row">
+          <span className="error-text">{errorMsg}</span>
           <button onClick={start}>Retry</button>
         </div>
       )}
 
-      <details style={{marginTop:16}}>
+      <details className="categories-details">
         <summary>Show all available categories</summary>
-        <div style={{fontSize:13, marginTop:6}}>
+        <div className="categories-list">
           {allIds.join(", ")}
         </div>
       </details>

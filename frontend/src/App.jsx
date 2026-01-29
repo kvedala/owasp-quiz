@@ -22,22 +22,22 @@ function AppContent() {
   const sourceUrl = sources.about || "https://cheatsheetseries.owasp.org";
 
   return (
-    <div style={{maxWidth: 980, margin: "0 auto", padding: 16}}>
-      <header style={{marginBottom: 16, borderBottom: '2px solid #f0f0f0', paddingBottom: 16}}>
-        <div style={{display: 'flex', alignItems: 'center', gap: 20, marginBottom: 12}}>
+    <div className="app-container">
+      <header className="app-header">
+        <div className="app-header-row">
           <img 
             src="https://opencompany.example/wp-content/uploads/2025/11/psplogo.jpg" 
             alt="OpenCompany" 
-            style={{height: 60, width: 'auto'}}
+            className="app-logo"
           />
-          <div style={{flex: 1}}>
-            <h2 style={{margin: 0}}>{title}</h2>
-            <p style={{fontSize: 14, color: '#666', margin: '4px 0 0 0'}}>
+          <div className="app-header-content">
+            <h2 className="app-title">{title}</h2>
+            <p className="app-subtitle">
               Powered by OpenCompany
             </p>
           </div>
         </div>
-        <p style={{fontSize: 12, color: '#888', margin: 0}}>
+        <p className="app-attribution">
           Uses official OWASP Cheat Sheets ({license}). Source: <a href={sourceUrl} target="_blank">cheatsheetseries.owasp.org</a>
         </p>
       </header>
