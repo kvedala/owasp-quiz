@@ -35,19 +35,27 @@ export default function Quiz({ candidate, quiz, answers, setAnswers, onDone, sub
   return (
     <div>
       <h3>Questions ({total})</h3>
-      {quiz.questions.map((q, i) => (
-        <div key={q.id} style={{border:"1px solid #ddd", padding:12, marginBottom:12, background: submitted ? (answers[q.id] === undefined ? "#f5f5f5" : "#f0f0f0") : "white"}}>
-          <div style={{display:"flex", justifyContent:"space-between"}}>
+      {quiz.questions.map((q, i) => {
+        const cardClass = submitted
+          ? (answers[q.id] === undefined ? "question-card question-card--unanswered" : "question-card question-card--answered")
+          : "question-card";
+
+        return (
+        <div key={q.id} className={cardClass}>
+          <div className="question-header">
             <div><strong>Q{i+1}.</strong> {q.stem}</div>
-            <div style={{fontSize:12, color:"#555"}}>{q.category}</div>
+            <div className="question-meta">{q.category}</div>
           </div>
           <ol type="A">
             {q.options.map((opt, ix) => {
               const isSelected = answers[q.id] === ix;
-              const selectedStyle = submitted && isSelected ? {background: "#e8f4f8", border: "1px solid #0288d1"} : {};
+              const optionClass = submitted && isSelected
+                ? "question-option question-option--selected"
+                : "question-option";
+              const labelClass = submitted ? "option-label option-label--disabled" : "option-label";
               return (
-                <li key={ix} style={{marginTop:6, ...selectedStyle}}>
-                  <label style={{cursor: submitted ? "default" : "pointer"}}>
+                <li key={ix} className={optionClass}>
+                  <label className={labelClass}>
                     <input
                       type="radio"
                       name={q.id}
@@ -61,25 +69,26 @@ export default function Quiz({ candidate, quiz, answers, setAnswers, onDone, sub
             })}
           </ol>
           {submitted && q.explanation && (
-            <div style={{marginTop:12, padding:10, background:"#f9f9f9", border:"1px solid #e0e0e0", borderRadius:4, fontSize:13}}>
-              <strong style={{color:"#1976d2"}}>Explanation:</strong>
-              <p style={{margin:"6px 0 0 0", lineHeight:1.5}}>{q.explanation}</p>
+            <div className="explanation-box">
+              <strong className="explanation-title">Explanation:</strong>
+              <p className="explanation-text">{q.explanation}</p>
             </div>
           )}
-          <div style={{fontSize:12, marginTop: 8}}>
+          <div className="source-row">
             <a href={q.url || q.source} target="_blank" rel="noreferrer">[source: {q.source}]</a>
           </div>
         </div>
-      ))}
+        );
+      })}
       {!submitted && (
-        <div style={{display:"flex", gap:16, alignItems:"center"}}>
+        <div className="quiz-actions">
           <button disabled={submitting} onClick={finish}>Submit</button>
           <span>Progress: {answered}/{total}</span>
-          <span style={{marginLeft:"auto"}}>Passing: ≥ 75%</span>
+          <span className="quiz-pass">Passing: ≥ 75%</span>
         </div>
       )}
       {submitted && (
-        <div style={{textAlign:"center", color:"#666", fontSize:14}}>
+        <div className="quiz-redirect">
           Redirecting to results in 1 second...
         </div>
       )}

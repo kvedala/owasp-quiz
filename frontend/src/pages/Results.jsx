@@ -1,4 +1,5 @@
 
+import { useState } from "react";
 import { useMetadata } from "../hooks/useMetadata";
 import { generateCertificatePDF, downloadCertificate } from "../utils/pdfGenerator";
 
@@ -21,6 +22,8 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
   const { metadata } = useMetadata();
   const pass = result.passed;
   const passingThreshold = 75; // Standard threshold; could be made configurable via metadata
+  const [locationConsent, setLocationConsent] = useState(false);
+  const [downloadingCert, setDownloadingCert] = useState(false);
 
   // Build a lookup for answers
   const answerMap = {};
@@ -30,17 +33,52 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
     }
   }
 
-  function handleDownloadCertificate() {
-    const pdfBlob = generateCertificatePDF(
-      candidate,
-      result.score,
-      result.total,
-      result.passed,
-      result.perCategory,
-      categoryNames
-    );
-    const fileName = `OWASP_Quiz_${candidate.replace(/\s+/g, "_")}_${new Date().toISOString().split('T')[0]}.pdf`;
-    downloadCertificate(pdfBlob, fileName);
+  async function getLocationDetails() {
+    if (!locationConsent || !navigator.geolocation) return null;
+
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy
+          });
+        },
+        () => resolve(null),
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+      );
+    });
+  }
+
+  async function handleDownloadCertificate() {
+    setDownloadingCert(true);
+    try {
+      const now = new Date();
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const userAgent = navigator.userAgent;
+      const location = await getLocationDetails();
+
+      const pdfBlob = generateCertificatePDF(
+        candidate,
+        result.score,
+        result.total,
+        result.passed,
+        result.perCategory,
+        categoryNames,
+        {
+          localTime: now.toLocaleString(),
+          utcTime: now.toUTCString(),
+          timeZone,
+          userAgent,
+          location
+        }
+      );
+      const fileName = `OWASP_Quiz_${candidate.replace(/\s+/g, "_")}_${new Date().toISOString().split('T')[0]}.pdf`;
+      downloadCertificate(pdfBlob, fileName);
+    } finally {
+      setDownloadingCert(false);
+    }
   }
 
   return (
@@ -52,13 +90,13 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
       </p>
 
       <h4>Categories</h4>
-      <p style={{fontSize:13}}>
+      <p className="results-meta">
         <b>Available:</b> {allCats?.join(", ") || "-"}<br/>
         <b>Selected:</b> {selectedCats?.join(", ") || "(all)"}
       </p>
 
       <h4>Category Scorecard</h4>
-      <table border="1" cellPadding="6" style={{borderCollapse:"collapse"}}>
+      <table border="1" cellPadding="6" className="score-table">
         <thead>
           <tr><th>Category</th><th>Name</th><th>Score</th><th>Total</th><th>%</th></tr>
         </thead>
@@ -70,9 +108,9 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
               <tr key={id}>
                 <td>{id}</td>
                 <td>{name}</td>
-                <td style={{textAlign:"center"}}>{obj.score}</td>
-                <td style={{textAlign:"center"}}>{obj.total}</td>
-                <td style={{textAlign:"center"}}>{pct}%</td>
+                <td className="score-center">{obj.score}</td>
+                <td className="score-center">{obj.total}</td>
+                <td className="score-center">{pct}%</td>
               </tr>
             );
           })}
@@ -80,15 +118,15 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
       </table>
 
       <h4>Review Incorrect Answers</h4>
-      <ul style={{marginTop:8, fontSize:15}}>
+      <ul className="review-list">
         {quiz?.questions?.map((q, idx) => {
           const userAns = result.answers?.[q.id];
           if (userAns == null || userAns === q.answerIndex) return null;
           return (
-            <li key={q.id} style={{marginBottom:10}}>
+            <li key={q.id} className="review-item">
               <b>Q{idx+1}:</b> <span>{sanitizeText(q.stem)}</span><br/>
-              <span style={{color:'#c00'}}>Your answer:</span> <span>{sanitizeText(q.options[userAns])}</span><br/>
-              <span style={{color:'#080'}}>Correct answer:</span> <span>{sanitizeText(q.options[q.answerIndex])}</span>
+              <span className="review-incorrect">Your answer:</span> <span>{sanitizeText(q.options[userAns])}</span><br/>
+              <span className="review-correct">Correct answer:</span> <span>{sanitizeText(q.options[q.answerIndex])}</span>
             </li>
           );
         })}
@@ -97,9 +135,22 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
         )}
       </ul>
 
-      <div style={{display:"flex", gap:12, marginTop:12}}>
-        <button onClick={handleDownloadCertificate}>
-          Download Certificate (PDF)
+      <div className="location-consent-box">
+        <label className="location-consent-label">
+          <input
+            type="checkbox"
+            checked={locationConsent}
+            onChange={(e) => setLocationConsent(e.target.checked)}
+          />
+          <span>
+            Include approximate location in certificate (requires permission)
+          </span>
+        </label>
+      </div>
+
+      <div className="results-actions">
+        <button onClick={handleDownloadCertificate} disabled={downloadingCert}>
+          {downloadingCert ? 'Generating...' : 'Download Certificate (PDF)'}
         </button>
         <button onClick={onRestart}>Take another exam</button>
       </div>

@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect } from "react";
+import questionBankData from "../data/questionBank.js";
 
 export const MetadataContext = createContext(null);
 
@@ -10,10 +11,14 @@ export function MetadataProvider({ children }) {
   useEffect(() => {
     async function fetchMetadata() {
       try {
-        const res = await fetch("/api/metadata");
-        if (!res.ok) throw new Error("Failed to load metadata");
-        const data = await res.json();
-        setMetadata(data || {});
+        const data = questionBankData.meta || {
+          title: "OWASP Security Quiz",
+          license: "CC BY-SA 4.0",
+          sources: {
+            about: "https://cheatsheetseries.owasp.org"
+          }
+        };
+        setMetadata(data);
       } catch (err) {
         console.error("Error loading metadata:", err);
         // Provide safe defaults if metadata fails to load
