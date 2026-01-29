@@ -1,15 +1,13 @@
+import questionBankData from './data/questionBank.js';
 
 let questionBankCache = null;
 
-// Load question bank from static asset
+// Load question bank from bundled data
 async function loadQuestionBank() {
   if (questionBankCache) return questionBankCache;
   
-  const res = await fetch("./questions.json");
-  if (!res.ok) throw new Error("Failed to load questions.json");
-  const data = await res.json();
-  questionBankCache = data;
-  return data;
+  questionBankCache = questionBankData;
+  return questionBankCache;
 }
 
 // Get unique categories from questions
@@ -73,8 +71,20 @@ export async function generateQuiz({ categories = [], count = 20 } = {}) {
   
   if (pool.length === 0) throw new Error("No questions found for selected categories");
   
+  // Deduplicate questions by question text
+  const seenQuestions = new Set();
+  const deduplicatedPool = pool.filter(q => {
+    if (seenQuestions.has(q.question)) {
+      return false;
+    }
+    seenQuestions.add(q.question);
+    return true;
+  });
+  
+  if (deduplicatedPool.length === 0) throw new Error("No unique questions found for selected categories");
+  
   // Shuffle and take count
-  const shuffled = shuffleArray([...pool]);
+  const shuffled = shuffleArray([...deduplicatedPool]);
   const selected = shuffled.slice(0, Math.min(count, shuffled.length));
   
   // Convert to quiz format
