@@ -18,8 +18,8 @@ A fully static React quiz application that delivers **500+ unique curated multip
 ✅ **Client-Side Scoring** – 75% pass threshold (≥15/20 correct)  
 ✅ **Per-Category Breakdown** – See your score for each OWASP category  
 ✅ **Download PDF Certificate** – Generated in the browser with environment metadata  
-✅ **Security Hardened** – Content Security Policy (CSP) headers, no inline styles  
-✅ **No Backend Required** – Fully static, deploy anywhere (GitHub Pages, Bitbucket Pages, etc.)  
+✅ **Security Hardened** – CSP and security headers configured in Vite  
+✅ **Pure Static Site** – No backend, no server required. Deploy to any static hosting (GitHub Pages, Bitbucket Pages, Netlify, Vercel, S3, CDN, etc.)  
 
 ---
 
@@ -84,13 +84,11 @@ frontend/                      # Static React app (Vite)
 ├── public/                   # Static assets
 │   └── questions.json        # Source file (bundled at build time)
 ├── index.html                # Entry HTML with CSP meta tag
-├── vite.config.js            # Vite config
+├── vite.config.js            # Vite config with security plugin
+├── SECURITY.md               # Detailed security documentation
 ├── package.json              # jsPDF + React dependencies
-└── dist/                      # Production build (deployed)
-.env.development              # Dev CSP config (allows unsafe-inline for Vite HMR)
-.env.production               # Prod CSP config (strict, no unsafe-inline)
+└── dist/                      # Production build (static files ready to deploy)
 README.md
-bitbucket-pipelines.yml
 ```
 
 ---
@@ -120,15 +118,15 @@ Questions are automatically deduplicated by exact question text during quiz gene
 
 ### Security
 
-- **Content Security Policy (CSP)**: 
-  - Dev: `style-src 'self' 'unsafe-inline'` (Vite HMR requires inline styles temporarily)
-  - Prod: `style-src 'self'` (strict — all styles in bundled CSS only)
-  - `script-src 'self'` (no inline scripts)
-  - `default-src 'self'` (no cross-origin data fetches)
-  
-- **No Inline Styles**: All styling moved to `frontend/src/styles.css`, no inline `style={{ }}` props
-- **Question Bank**: Bundled into JS at build time (doesn't appear as separate Network asset)
-- **Geolocation**: Optional, consent-based before certificate download
+Security features include:
+- **Content Security Policy (CSP)** - Prevents XSS and data injection attacks
+- **Security Headers** - X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy
+- **Build Security** - Source maps disabled, content hashing for integrity
+- **Privacy** - Geolocation optional and consent-based
+
+Security headers are configured in the Vite dev server. For production deployments, configure headers at your hosting platform or CDN level.
+
+📄 **For comprehensive security documentation, see [SECURITY.md](SECURITY.md)**
 
 ---
 
@@ -197,17 +195,25 @@ When downloading a certificate, the following details are automatically included
 
 ### Customize styling
 
-All app styles are in `frontend/src/styles.css`. No inline `style={{}}` props in components (for CSP compliance).
+All app styles are in [frontend/src/styles.css](frontend/src/styles.css). No inline `style={{}}` props in components (for CSP compliance).
 
-### Change CSP rules
+### Test security headers
 
-Edit `.env.development` and `.env.production`:
-- **Dev**: More permissive for HMR and debugging
-- **Prod**: Strict CSP for security
+Use online tools to verify security configuration:
+- [Mozilla Observatory](https://observatory.mozilla.org/)
+- [Security Headers](https://securityheaders.com/)
+
+Or test locally during development:
+```bash
+npm run dev
+curl -I http://localhost:5173/
+```
 
 ---
 
 ## Deployment
+
+This is a **pure static site** - the build output in `frontend/dist/` contains only HTML, CSS, and JavaScript files. Deploy to **any** static hosting platform:
 
 ### GitHub Pages
 
@@ -261,6 +267,20 @@ pipelines:
 
 Bitbucket automatically deploys artifacts to your Pages folder.
 
+### Other Static Hosting Platforms
+
+After running `npm run build`, simply upload the `frontend/dist/` folder to:
+
+- **Netlify**: Drag & drop `dist/` folder or connect Git repo
+- **Vercel**: `vercel --prod` in frontend directory
+- **Cloudflare Pages**: Connect Git repo or upload via dashboard
+- **AWS S3 + CloudFront**: Upload to S3 bucket, serve via CloudFront
+- **Azure Static Web Apps**: Deploy via Azure CLI or GitHub Actions
+- **Firebase Hosting**: `firebase deploy` after init
+- **Any web server**: Upload `dist/` contents to public HTML directory
+
+No special configuration required - it's just static files!
+
 ---
 
 ## Troubleshooting
@@ -272,27 +292,22 @@ A: The app automatically deduplicates by question text. If duplicates persist, e
 A: Vite doesn't allow JavaScript imports from `public/`. Questions must be in `frontend/src/data/questions.json`. Copy from `public/` if updating.
 
 **Q: CSP errors in browser console?**  
-A: 
-- **Dev**: Check `.env.development` includes `'unsafe-inline'` for HMR to work
-- **Prod**: Ensure no inline `style={{}}` props in components (use CSS classes instead)
+A: The CSP is configured in [frontend/vite.config.js](frontend/vite.config.js). If you need to adjust policies, modify the `cspDirectives` array. Note: `'unsafe-inline'` is required for React's inline styles.
+
+**Q: How to add security headers on my hosting platform?**  
+A: See [SECURITY.md](SECURITY.md) for recommended headers and platform-specific configuration. For Docker deployment with NGINX, see [DOCKER.md](DOCKER.md).
 
 **Q: Certificate not downloading?**  
 A: Check browser console for errors. If geolocation is enabled, try unchecking location consent and try again.
-
-**Q: Location data not on certificate?**  
-A: User must:
-1. Check the location consent checkbox
-2. Approve the browser geolocation prompt
-
-Some browsers (privacy mode) deny geolocation by default.
 
 ---
 
 ## License
 
-**App code**: (Add your chosen license here)  
+**Application Code**: MIT License (see [LICENSE.md](LICENSE.md))  
 **OWASP Content**: CC BY‑SA 4.0  
-See attribution in the app UI and on generated certificates.
+
+All questions are derived from the OWASP Cheat Sheet Series and OWASP Top 10, licensed under CC BY‑SA 4.0. Attribution is included in the app UI and on generated certificates.
 
 ---
 
@@ -302,4 +317,5 @@ See attribution in the app UI and on generated certificates.
 - 🔝 [OWASP Top 10 (2025)](https://owasp.org/Top10/)
 - 🏗️ [Vite Documentation](https://vitejs.dev)
 - 📄 [jsPDF for certificate generation](https://github.com/parallax/jsPDF)
-- 🔒 [Content Security Policy (MDN)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)
+- 🔒 [Security Documentation](SECURITY.md)
+- 🐳 [Docker Deployment Guide](DOCKER.md)
