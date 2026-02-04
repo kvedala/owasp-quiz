@@ -25,11 +25,16 @@ function AppContent() {
     <div className="app-container">
       <header className="app-header">
         <div className="app-header-row">
-          <img 
-            src="https://opencompany.example/wp-content/uploads/2025/11/psplogo.jpg" 
-            alt="OpenCompany" 
+          <svg 
             className="app-logo"
-          />
+            viewBox="0 0 100 100"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle cx="50" cy="50" r="48" fill="#FFD700" stroke="#333" strokeWidth="2"/>
+            <circle cx="35" cy="40" r="5" fill="#333"/>
+            <circle cx="65" cy="40" r="5" fill="#333"/>
+            <path d="M 30 60 Q 50 75 70 60" stroke="#333" strokeWidth="3" fill="none" strokeLinecap="round"/>
+          </svg>
           <div className="app-header-content">
             <h2 className="app-title">{title}</h2>
             <p className="app-subtitle">
