@@ -28,11 +28,13 @@ function securityHeadersPlugin() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         // Security headers for dev server
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+        res.setHeader('Content-Security-Policy', cspContent)
         res.setHeader('X-Content-Type-Options', 'nosniff')
         res.setHeader('X-Frame-Options', 'DENY')
         res.setHeader('X-XSS-Protection', '1; mode=block')
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-        res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+        res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), speaker=()')
         next()
       })
     }
@@ -49,11 +51,13 @@ export default defineConfig({
   server: { 
     port: 5173,
     headers: {
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+      'Content-Security-Policy': cspContent,
       'X-Content-Type-Options': 'nosniff',
       'X-Frame-Options': 'DENY',
       'X-XSS-Protection': '1; mode=block',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Permissions-Policy': 'geolocation=(), microphone=(), camera=()'
+      'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=(), speaker=()'
     }
   },
   build: {
