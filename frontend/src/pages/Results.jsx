@@ -59,7 +59,8 @@ export default function Results({ candidate, quiz, result, categoryNames, allCat
       const userAgent = navigator.userAgent;
       const location = await getLocationDetails();
 
-      const pdfBlob = generateCertificatePDF(
+      // generateCertificatePDF is now async (uses dynamic import for jsPDF)
+      const pdfBlob = await generateCertificatePDF(
         candidate,
         result.score,
         result.total,

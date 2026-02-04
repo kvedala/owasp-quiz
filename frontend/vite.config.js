@@ -62,10 +62,19 @@ export default defineConfig({
         // Hashing for cache busting
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+        assetFileNames: 'assets/[name].[hash].[ext]',
+        // Manual chunking for better code splitting
+        manualChunks: {
+          // Separate React and React-DOM into their own chunk
+          'react-vendor': ['react', 'react-dom'],
+          // Separate jsPDF into its own chunk (only loaded when generating PDF)
+          'pdf-vendor': ['jspdf']
+        }
       }
     },
     // Enable source maps for production debugging (can be disabled for stricter security)
-    sourcemap: false
+    sourcemap: false,
+    // Increase chunk size warning limit to 600KB
+    chunkSizeWarningLimit: 600
   }
 })

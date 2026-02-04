@@ -1,4 +1,13 @@
-import { jsPDF } from "jspdf";
+// Import jsPDF dynamically to reduce initial bundle size
+let jsPDF = null;
+
+async function loadJsPDF() {
+  if (!jsPDF) {
+    const module = await import('jspdf');
+    jsPDF = module.jsPDF;
+  }
+  return jsPDF;
+}
 
 /**
  * Generate a PDF certificate for quiz completion
@@ -11,11 +20,14 @@ import { jsPDF } from "jspdf";
  * @param {object} extraDetails - Optional environment details
  * @returns {Blob} PDF blob that can be downloaded
  */
-export function generateCertificatePDF(name, score, total, passed, perCategory, categoryNames, extraDetails = {}) {
+export async function generateCertificatePDF(name, score, total, passed, perCategory, categoryNames, extraDetails = {}) {
+  // Dynamically load jsPDF only when needed
+  const PDF = await loadJsPDF();
+  
   const pageWidth = 210; // A4 width in mm
   const pageHeight = 297; // A4 height in mm
   
-  const doc = new jsPDF({
+  const doc = new PDF({
     orientation: "portrait",
     unit: "mm",
     format: "a4"
